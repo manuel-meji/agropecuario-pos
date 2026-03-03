@@ -1,0 +1,96 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      body {
+        font-family: "Inter", sans-serif;
+        background-color: #f3f4f6;
+        padding: 30px;
+      }
+      .card {
+        background-color: #ffffff;
+        border-radius: 12px;
+        padding: 25px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        max-width: 600px;
+        margin: auto;
+      }
+      .header {
+        background: linear-gradient(135deg, #22c55e, #16a34a);
+        color: white;
+        padding: 20px;
+        border-radius: 8px;
+        text-align: center;
+      }
+      .metric {
+        margin: 15px 0;
+        border-bottom: 1px solid #e5e7eb;
+        padding-bottom: 10px;
+      }
+      .metric-label {
+        font-size: 14px;
+        color: #6b7280;
+        font-weight: bold;
+      }
+      .metric-value {
+        font-size: 20px;
+        color: #111827;
+      }
+      .warning {
+        color: #dc2626;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="header">
+        <h2 th:text="${title}">Resumen de Fin de Día</h2>
+        <p th:text="${#temporals.format(timestamp, 'dd-MM-yyyy HH:mm')}">
+          01-01-2024
+        </p>
+      </div>
+
+      <div class="metric">
+        <div class="metric-label">Ingresos Brutos de Ventas (CRC)</div>
+        <div class="metric-value">
+          ₡ <span th:text="${totalSalesValue}">0.00</span>
+        </div>
+      </div>
+
+      <div class="metric">
+        <div class="metric-label">Volumen Operativo (Tx)</div>
+        <div class="metric-value" th:text="${totalTransactions}">0</div>
+      </div>
+
+      <div class="metric">
+        <div class="metric-label">Ganancia Neta Calculada (CRC)</div>
+        <div class="metric-value" style="color: #16a34a">
+          ₡ <span th:text="${netProfitEstimation}">0.00</span>
+        </div>
+      </div>
+
+      <div class="metric" th:if="${documentsInContingency > 0}">
+        <div class="metric-label warning">
+          🚨 Alerta: Documentos de Tributación Retenidos (Sin Conexión BCCR)
+        </div>
+        <div class="metric-value warning" th:text="${documentsInContingency}">
+          0
+        </div>
+      </div>
+
+      <p
+        style="
+          text-align: center;
+          font-size: 12px;
+          color: #9ca3af;
+          margin-top: 20px;
+        "
+      >
+        Generado automáticamente por el Motor Agropecuario POS - No responda a
+        este correo.
+      </p>
+    </div>
+  </body>
+</html>
