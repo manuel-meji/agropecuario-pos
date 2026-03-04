@@ -1,11 +1,34 @@
-import React from "react";
-import { Outlet } from "react-router-dom";
+import { useEffect } from "react";
+import { Outlet, useLocation } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import { useThemeStore } from "../../store/themeStore";
 import { Moon, Sun } from "lucide-react";
 
 export default function RootLayout() {
   const { isDark, toggleTheme } = useThemeStore();
+  const location = useLocation();
+
+  useEffect(() => {
+    const root = window.document.documentElement;
+    if (isDark) {
+      root.classList.add("dark");
+    } else {
+      root.classList.remove("dark");
+    }
+  }, [isDark]);
+
+  const getPageTitle = () => {
+    switch (location.pathname) {
+      case '/dashboard': return <h1 className="text-xl font-bold text-gradient">Dashboard <span className="text-gray-600 dark:text-gray-300">Principal</span></h1>;
+      case '/inventory': return <h1 className="text-xl font-bold text-gradient">Inventario <span className="text-gray-600 dark:text-gray-300">Agronomía</span></h1>;
+      case '/receivables': return <h1 className="text-xl font-bold text-gradient">Cuentas <span className="text-gray-600 dark:text-gray-300">por Cobrar</span></h1>;
+      case '/payables': return <h1 className="text-xl font-bold text-gradient">Cuentas <span className="text-gray-600 dark:text-gray-300">por Pagar</span></h1>;
+      case '/taxes': return <h1 className="text-xl font-bold text-gradient">Módulo <span className="text-gray-600 dark:text-gray-300">Tributario</span></h1>;
+      case '/settings': return <h1 className="text-xl font-bold text-gradient">Configuración <span className="text-gray-600 dark:text-gray-300">Sistema</span></h1>;
+      case '/pos':
+      default: return <h1 className="text-xl font-bold text-gradient">POS <span className="text-gray-600 dark:text-gray-300">Terminal</span></h1>;
+    }
+  };
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-950 transition-colors duration-500 overflow-hidden relative">
@@ -21,9 +44,7 @@ export default function RootLayout() {
       <main className="flex-1 flex flex-col relative z-0 h-full overflow-hidden">
         {/* Top Liquid Glass Navigation Bar */}
         <header className="h-16 liquid-glass mx-4 mt-4 mb-2 flex items-center justify-between px-6 z-20 shrink-0">
-          <h1 className="text-xl font-bold text-gradient">
-            POS <span className="text-gray-600 dark:text-gray-300">Terminal</span>
-          </h1>
+          {getPageTitle()}
 
           <div className="flex items-center gap-4">
              {/* User Profile placeholder */}

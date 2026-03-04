@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { NavLink } from "react-router-dom";
 import { 
   LayoutDashboard, 
@@ -38,7 +38,7 @@ const Sidebar = () => {
       </div>
 
       {/* Navigation List */}
-      <nav className="flex-1 px-3 space-y-2 overflow-y-auto custom-scrollbar">
+      <nav className="flex-1 px-3 space-y-2 overflow-x-hidden overflow-y-auto custom-scrollbar">
         {menuItems.map((item) => {
           const Icon = item.icon;
           return (
