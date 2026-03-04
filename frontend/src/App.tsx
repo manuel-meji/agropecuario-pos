@@ -1,3 +1,5 @@
+import React from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import RootLayout from "./components/layout/RootLayout";
 import POSTerminal from "./pages/pos/POSTerminal";
 import Dashboard from "./pages/dashboard/Dashboard";
@@ -13,6 +15,7 @@ function App() {
           <Route index element={<Navigate to="/pos" replace />} />
           <Route path="pos" element={<POSTerminal />} />
           <Route path="dashboard" element={<Dashboard />} />
+          <Route path="debug" element={<div className="p-8 text-2xl font-bold text-red-600">React montado — debug</div>} />
           <Route path="inventory" element={<div className="p-8 text-2xl font-bold dark:text-white">Inventario de Agronomía</div>} />
           <Route path="receivables" element={<ReceivablesView />} />
           <Route path="payables" element={<PayablesView />} />

@@ -1,3 +1,4 @@
+import React, { useState } from "react";
 import { NavLink } from "react-router-dom";
 import { 
   LayoutDashboard, 
@@ -9,7 +10,6 @@ import {
   Settings,
   ChevronRight
 } from "lucide-react";
-import { useState } from "react";
 
 const Sidebar = () => {
   const [isHovered, setIsHovered] = useState(false);

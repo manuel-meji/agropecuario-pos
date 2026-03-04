@@ -1,6 +1,7 @@
+import React from "react";
 import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
-import { useThemeStore } from "../store/themeStore";
+import { useThemeStore } from "../../store/themeStore";
 import { Moon, Sun } from "lucide-react";
 
 export default function RootLayout() {
