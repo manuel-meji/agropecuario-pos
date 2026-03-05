@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Barcode, Trash2, Plus, Minus, CreditCard, Banknote, ShoppingCart, User, Smartphone, X } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -310,11 +310,11 @@ export default function POSTerminal() {
                  {isProcessing ? 'Procesando...' : 'Tarjeta'}
               </button>
               <button 
-                 onClick={() => handleCheckout("SIMPE_MOVIL")}
+                 onClick={() => handleCheckout("SINPE_MOVIL")}
                  disabled={cart.length === 0 || isProcessing} 
                  className="bg-gradient-to-tr from-green-700 to-green-500 text-white font-medium rounded-lg px-4 py-3 shadow-[0_4px_14px_0_rgba(34,197,94,0.39)] hover:shadow-lg transform transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                  <Smartphone size={20} />
-                 {isProcessing ? 'Procesando...' : 'SIMPE Móvil'}
+                 {isProcessing ? 'Procesando...' : 'SINPE Móvil'}
               </button>
               <button 
                  onClick={() => handleCheckout("CREDIT")}
