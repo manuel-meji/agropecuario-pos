@@ -24,9 +24,11 @@ export default function ReceivablesView() {
     try {
       const data = await getReceivablesByClient();
       setClients(data);
+      return data;
     } catch (error) {
       console.error("Error loading clients receivables", error);
       toast.error("Error al cargar cuentas por cobrar");
+      return [];
     } finally {
       setLoading(false);
     }
@@ -65,8 +67,14 @@ export default function ReceivablesView() {
       setPaymentId(null);
       
       // Recargar datos
-      await loadClients();
+      const updatedClients = await loadClients();
       if (selectedClient) {
+        if (updatedClients && updatedClients.length > 0) {
+          const updatedClient = updatedClients.find((c: any) => c.clientName === selectedClient.clientName);
+          if (updatedClient) {
+            setSelectedClient(updatedClient);
+          }
+        }
         const history = await getClientHistory(selectedClient.clientName);
         setClientHistory(history);
       }
