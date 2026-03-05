@@ -8,7 +8,10 @@ import {
   CreditCard,
   FileSpreadsheet,
   Settings,
-  ChevronRight
+  ChevronRight,
+  Receipt,
+  Wallet,
+  Truck
 } from "lucide-react";
 
 const Sidebar = () => {
@@ -16,9 +19,12 @@ const Sidebar = () => {
 
   const menuItems = [
     { name: "Terminal POS", path: "/pos", icon: ShoppingCart },
+    { name: "Historial Ventas", path: "/sales", icon: Receipt },
     { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
     { name: "Inventario", path: "/inventory", icon: PackageSearch },
-    { name: "Cuentas Cobrar", path: "/receivables", icon: Users },
+    { name: "Clientes", path: "/clients", icon: Users },
+    { name: "Proveedores", path: "/suppliers", icon: Truck },
+    { name: "Cuentas Cobrar", path: "/receivables", icon: Wallet },
     { name: "Cuentas Pagar", path: "/payables", icon: CreditCard },
     { name: "Tributación", path: "/taxes", icon: FileSpreadsheet },
     { name: "Configuración", path: "/settings", icon: Settings }

@@ -1,0 +1,15 @@
+# JDK y Maven
+/backend/jdk-*
+/backend/apache-maven-*
+
+# Logs del sistema
+*.log
+
+# Carpetas de construcción / dependencias
+/backend/target/
+/frontend/node_modules/
+/node_modules/
+
+# Archivos de SO
+.DS_Store
+Thumbs.db

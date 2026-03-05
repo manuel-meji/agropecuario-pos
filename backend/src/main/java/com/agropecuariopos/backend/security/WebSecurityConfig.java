@@ -53,11 +53,17 @@ public class WebSecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        http.csrf(csrf -> csrf.disable())
+        http.cors(org.springframework.security.config.Customizer.withDefaults())
+                .csrf(csrf -> csrf.disable())
                 .exceptionHandling(exception -> exception.authenticationEntryPoint(unauthorizedHandler))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth.requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/test/**").permitAll()
+                        .requestMatchers("/api/auth/**", "/api/test/**", "/api/products", "/api/products/**",
+                                "/api/categories", "/api/categories/**",
+                                "/api/sales", "/api/sales/**", "/api/clients", "/api/clients/**", "/api/suppliers",
+                                "/api/suppliers/**")
+                        .permitAll() // <-- Abierto para pruebas
                         .anyRequest().authenticated());
 
         http.authenticationProvider(authenticationProvider());

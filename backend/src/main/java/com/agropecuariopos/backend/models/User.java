@@ -10,6 +10,7 @@ import lombok.Setter;
 import java.util.HashSet;
 import java.util.Set;
 import org.hibernate.envers.Audited;
+import org.hibernate.envers.RelationTargetAuditMode;
 import org.springframework.data.annotation.CreatedBy;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedBy;
@@ -45,10 +46,11 @@ public class User {
 
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(name = "user_roles", joinColumns = @JoinColumn(name = "user_id"), inverseJoinColumns = @JoinColumn(name = "role_id"))
+    @Audited(targetAuditMode = RelationTargetAuditMode.NOT_AUDITED)
     private Set<Role> roles = new HashSet<>();
 
     public User() {
-        
+
     }
 
     public User(String username, String email, String password) {

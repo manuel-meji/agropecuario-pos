@@ -63,6 +63,12 @@ public class Sale {
     private String clientName;
     private String clientIdentification; // optional
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_client")
+    @org.hibernate.envers.Audited(targetAuditMode = org.hibernate.envers.RelationTargetAuditMode.NOT_AUDITED)
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
+    private Client client;
+
     @OneToMany(mappedBy = "sale", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<SaleItem> items = new ArrayList<>();
 

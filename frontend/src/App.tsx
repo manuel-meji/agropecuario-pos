@@ -1,22 +1,29 @@
 
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { Toaster } from 'react-hot-toast';
 import RootLayout from "./components/layout/RootLayout";
 import POSTerminal from "./pages/pos/POSTerminal";
 import Dashboard from "./pages/dashboard/Dashboard";
 import ReceivablesView from "./pages/receivables/ReceivablesView";
 import PayablesView from "./pages/payables/PayablesView";
 import SettingsView from "./pages/settings/SettingsView";
-
 import InventoryView from "./pages/inventory/InventoryView";
 import TaxesView from "./pages/taxes/TaxesView";
+import ClientsView from "./pages/clients/ClientsView";
+import SalesView from "./pages/sales/SalesView";
+import SuppliersView from "./pages/suppliers/SuppliersView";
 
 function App() {
   return (
     <BrowserRouter>
+      <Toaster position="top-right" toastOptions={{ className: 'dark:bg-gray-800 dark:text-white' }} />
       <Routes>
         <Route path="/" element={<RootLayout />}>
           <Route index element={<Navigate to="/pos" replace />} />
           <Route path="pos" element={<POSTerminal />} />
+          <Route path="sales" element={<SalesView />} />
+          <Route path="clients" element={<ClientsView />} />
+          <Route path="suppliers" element={<SuppliersView />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="debug" element={<div className="p-8 text-2xl font-bold text-red-600">React montado — debug</div>} />
           <Route path="inventory" element={<InventoryView />} />

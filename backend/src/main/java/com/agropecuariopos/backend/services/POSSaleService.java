@@ -34,6 +34,12 @@ public class POSSaleService {
     @Autowired
     private ProductRepository productRepository;
 
+    @Autowired
+    private XMLDocumentGeneratorV44 xmlDocumentGenerator;
+
+    @Autowired
+    private XadesSignatureService xadesSignatureService;
+
     @Transactional
     public Sale processNewSale(SaleRequest request) {
 

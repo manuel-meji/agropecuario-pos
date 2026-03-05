@@ -8,6 +8,8 @@ import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.envers.Audited;
+import org.hibernate.envers.RelationTargetAuditMode;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import java.math.BigDecimal;
 
@@ -49,7 +51,9 @@ public class Product {
     private Boolean isAgrochemicalInsufficiency;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "category_id")
+    @JoinColumn(name = "id_categoria")
+    @Audited(targetAuditMode = RelationTargetAuditMode.NOT_AUDITED)
+    @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
     private Category category;
 
     // Bloqueo Optimista: previene condiciones de carrera si 2 empleados venden el
