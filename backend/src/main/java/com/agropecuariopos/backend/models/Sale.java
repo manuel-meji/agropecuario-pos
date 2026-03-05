@@ -66,7 +66,7 @@ public class Sale {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_client")
     @org.hibernate.envers.Audited(targetAuditMode = org.hibernate.envers.RelationTargetAuditMode.NOT_AUDITED)
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private Client client;
 
     @OneToMany(mappedBy = "sale", cascade = CascadeType.ALL, orphanRemoval = true)
@@ -82,7 +82,7 @@ public class Sale {
     private LocalDateTime createdDate;
 
     public enum PaymentMethod {
-        CASH, CARD, TRANSFER, CREDIT
+        CASH, CARD, TRANSFER, CREDIT, SIMPE_MOVIL
     }
 
     public enum SaleStatus {

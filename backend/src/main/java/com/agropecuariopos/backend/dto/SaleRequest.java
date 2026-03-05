@@ -17,11 +17,17 @@ public class SaleRequest {
     @NotNull
     private Sale.PaymentMethod paymentMethod;
 
+    private Long clientId;
     private String clientName;
     private String clientIdentification;
 
     @DecimalMin("0.0")
     private BigDecimal totalDiscount;
+
+    private double subtotal;
+    private double tax;
+    private double total;
+
     // Client requested exemption string from Hacienda
     private String exonetAuthorizationCode;
 
@@ -38,7 +44,19 @@ public class SaleRequest {
         @NotNull
         private Integer quantity;
 
+        private Integer qty; // alias para compatibilidad
+
         @DecimalMin("0.0")
         private BigDecimal customDiscount;
+
+        // getter para qty
+        public int getQty() {
+            if (qty != null) {
+                return qty;
+            } else if (quantity != null) {
+                return quantity;
+            }
+            return 0;
+        }
     }
 }

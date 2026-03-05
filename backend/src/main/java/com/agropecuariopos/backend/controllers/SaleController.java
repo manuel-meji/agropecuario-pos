@@ -1,12 +1,16 @@
 package com.agropecuariopos.backend.controllers;
 
+import com.agropecuariopos.backend.dto.SaleRequest;
+import com.agropecuariopos.backend.dto.SaleResponse;
+import com.agropecuariopos.backend.models.AccountReceivable;
+import com.agropecuariopos.backend.models.Client;
 import com.agropecuariopos.backend.models.Product;
 import com.agropecuariopos.backend.models.Sale;
 import com.agropecuariopos.backend.models.SaleItem;
-import com.agropecuariopos.backend.models.Client;
+import com.agropecuariopos.backend.repositories.AccountReceivableRepository;
+import com.agropecuariopos.backend.repositories.ClientRepository;
 import com.agropecuariopos.backend.repositories.ProductRepository;
 import com.agropecuariopos.backend.repositories.SaleRepository;
-import com.agropecuariopos.backend.repositories.ClientRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,6 +32,9 @@ public class SaleController {
     @Autowired
     private ClientRepository clientRepository;
 
+    @Autowired
+    private AccountReceivableRepository accountReceivableRepository;
+
     @GetMapping
     public List<Sale> getAllSales() {
         return saleRepository.findAll();
@@ -35,10 +42,10 @@ public class SaleController {
 
     @PostMapping
     @Transactional
-    public Sale createSale(@RequestBody SaleRequest request) {
+    public SaleResponse createSale(@RequestBody SaleRequest request) {
         Sale sale = new Sale();
         sale.setInvoiceNumber("FAC-POS-" + System.currentTimeMillis());
-        sale.setPaymentMethod(Sale.PaymentMethod.valueOf(request.getPaymentMethod()));
+        sale.setPaymentMethod(Sale.PaymentMethod.valueOf(request.getPaymentMethod().toString()));
         sale.setStatus(Sale.SaleStatus.COMPLETED);
         sale.setSubtotal(BigDecimal.valueOf(request.getSubtotal()));
         sale.setTotalTax(BigDecimal.valueOf(request.getTax()));
@@ -60,7 +67,7 @@ public class SaleController {
             sale.setClientIdentification(request.getClientIdentification());
         }
 
-        for (SaleItemRequest itemReq : request.getItems()) {
+        for (SaleRequest.SaleItemRequest itemReq : request.getItems()) {
             Product product = productRepository.findById(itemReq.getProductId()).orElseThrow();
 
             // Restar stock
@@ -80,104 +87,31 @@ public class SaleController {
             sale.getItems().add(item);
         }
 
-        return saleRepository.save(sale);
-    }
-}
+        Sale savedSale = saleRepository.save(sale);
 
-class SaleRequest {
-    private List<SaleItemRequest> items;
-    private String paymentMethod;
-    private double subtotal;
-    private double tax;
-    private double total;
-    private Long clientId;
-    private String clientName;
-    private String clientIdentification;
+        // Si es crédito, crear cuenta por cobrar
+        if (sale.getPaymentMethod() == Sale.PaymentMethod.CREDIT && sale.getClient() != null) {
+            AccountReceivable receivable = new AccountReceivable();
+            receivable.setRelatedSale(savedSale);
+            receivable.setClientName(sale.getClient().getName());
+            receivable.setClientPhone(sale.getClient().getPhone());
+            receivable.setTotalDebt(sale.getFinalTotal());
+            receivable.setAmountPaid(BigDecimal.ZERO);
+            receivable.setStatus(AccountReceivable.DebtStatus.PENDING);
+            receivable.setDueDate(LocalDateTime.now().plusDays(30));
+            accountReceivableRepository.save(receivable);
+        }
 
-    // getters and setters
-    public List<SaleItemRequest> getItems() {
-        return items;
-    }
-
-    public void setItems(List<SaleItemRequest> items) {
-        this.items = items;
-    }
-
-    public String getPaymentMethod() {
-        return paymentMethod;
-    }
-
-    public void setPaymentMethod(String paymentMethod) {
-        this.paymentMethod = paymentMethod;
-    }
-
-    public double getSubtotal() {
-        return subtotal;
-    }
-
-    public void setSubtotal(double subtotal) {
-        this.subtotal = subtotal;
-    }
-
-    public double getTax() {
-        return tax;
-    }
-
-    public void setTax(double tax) {
-        this.tax = tax;
-    }
-
-    public double getTotal() {
-        return total;
-    }
-
-    public void setTotal(double total) {
-        this.total = total;
-    }
-
-    public Long getClientId() {
-        return clientId;
-    }
-
-    public void setClientId(Long clientId) {
-        this.clientId = clientId;
-    }
-
-    public String getClientName() {
-        return clientName;
-    }
-
-    public void setClientName(String clientName) {
-        this.clientName = clientName;
-    }
-
-    public String getClientIdentification() {
-        return clientIdentification;
-    }
-
-    public void setClientIdentification(String clientIdentification) {
-        this.clientIdentification = clientIdentification;
-    }
-}
-
-class SaleItemRequest {
-    private Long productId;
-    private int qty;
-
-    // getters and setters
-    public Long getProductId() {
-        return productId;
-    }
-
-    public void setProductId(Long productId) {
-        this.productId = productId;
-    }
-
-    public int getQty() {
-        return qty;
-    }
-
-    public void setQty(int qty) {
-        this.qty = qty;
+        return new SaleResponse(
+                savedSale.getId(),
+                savedSale.getInvoiceNumber(),
+                savedSale.getPaymentMethod().toString(),
+                savedSale.getStatus().toString(),
+                savedSale.getSubtotal(),
+                savedSale.getTotalTax(),
+                savedSale.getFinalTotal(),
+                savedSale.getClientName(),
+                savedSale.getCreatedDate()
+        );
     }
 }

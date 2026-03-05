@@ -18,5 +18,11 @@ export const getClients = () => api.get('/clients').then(res => res.data);
 export const createClient = (client: any) => api.post('/clients', client).then(res => res.data);
 export const getSuppliers = () => api.get('/suppliers').then(res => res.data);
 export const createSupplier = (supplier: any) => api.post('/suppliers', supplier).then(res => res.data);
+export const getReceivables = () => api.get('/accounts-receivable').then(res => res.data);
+export const getReceivablesByClient = () => api.get('/accounts-receivable/by-client').then(res => res.data);
+export const getClientHistory = (clientName: string) => api.get(`/accounts-receivable/${encodeURIComponent(clientName)}/history`).then(res => res.data);
+export const getClientHistoryByClientId = (clientId: number) => api.get(`/clients/${clientId}/history`).then(res => res.data);
+export const makePayment = (id: number, amount: number) => api.post(`/accounts-receivable/${id}/pay`, { amount }).then(res => res.data);
 
 export default api;
+

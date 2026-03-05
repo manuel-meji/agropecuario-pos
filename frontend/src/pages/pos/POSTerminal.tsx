@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Search, Barcode, Trash2, Plus, Minus, CreditCard, Banknote, ShoppingCart, User } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Search, Barcode, Trash2, Plus, Minus, CreditCard, Banknote, ShoppingCart, User, Smartphone, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getProducts, createSale, getClients } from '../../services/api';
 
@@ -10,6 +11,10 @@ export default function POSTerminal() {
   const [clients, setClients] = useState<any[]>([]);
   const [selectedClientId, setSelectedClientId] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isCredit, setIsCredit] = useState(false);
+  const [isCashModalOpen, setIsCashModalOpen] = useState(false);
+  const [cashAmount, setCashAmount] = useState('');
+  const [changeAmount, setChangeAmount] = useState(0);
 
   useEffect(() => {
     const loadData = async () => {
@@ -34,10 +39,10 @@ export default function POSTerminal() {
     setCart(prev => {
       const existing = prev.find(item => item.product.id === product.id);
       if (existing) {
-        if (existing.qty >= product.stockQuantity) return prev; // Límite de stock
+        if (existing.qty >= product.stockQuantity) return prev;
         return prev.map(item => item.product.id === product.id ? { ...item, qty: item.qty + 1 } : item);
       }
-      if (product.stockQuantity <= 0) return prev; // No vender si no hay
+      if (product.stockQuantity <= 0) return prev;
       return [...prev, { product, qty: 1 }];
     });
   };
@@ -58,8 +63,6 @@ export default function POSTerminal() {
 
   const calculateSubtotal = () => cart.reduce((acc, item) => acc + (item.product.salePrice * item.qty), 0);
   const calculateTax = () => cart.reduce((acc, item) => {
-    // Si isAgrochemicalInsufficiency es null o false maneja el rate. 
-    // Para simplificar, suponemos 1% para productos agroquimicos si aplica, o 13% base (Configurable futuramente)
     const rate = item.product.isAgrochemicalInsufficiency ? 0.01 : 0.13;
     return acc + (item.product.salePrice * item.qty * rate);
   }, 0);
@@ -68,8 +71,67 @@ export default function POSTerminal() {
   const tax = calculateTax();
   const total = subtotal + tax;
 
+  const handleCashPayment = async () => {
+    const paidAmount = parseFloat(cashAmount);
+    
+    if (isNaN(paidAmount) || paidAmount <= 0) {
+      toast.error('Por favor ingresa un monto válido.');
+      return;
+    }
+    
+    if (paidAmount < total) {
+      toast.error(`El monto es insuficiente. Faltam ₡${(total - paidAmount).toLocaleString(undefined, { maximumFractionDigits: 2 })}`);
+      return;
+    }
+
+    const change = paidAmount - total;
+    setChangeAmount(change);
+
+    // Process the sale
+    setIsProcessing(true);
+    try {
+      const saleData = {
+        paymentMethod: "CASH",
+        subtotal: subtotal,
+        tax: tax,
+        total: total,
+        clientId: selectedClientId ? parseInt(selectedClientId) : null,
+        items: cart.map(item => ({
+          productId: item.product.id,
+          qty: item.qty
+        }))
+      };
+      
+      await createSale(saleData);
+      
+      // Show change modal
+      toast.success(`¡Venta completada! Vuelto: ₡${change.toLocaleString(undefined, { maximumFractionDigits: 2 })}`);
+      
+      // Reset state
+      setCart([]);
+      setCashAmount('');
+      setChangeAmount(0);
+      setTimeout(() => setIsCashModalOpen(false), 1500);
+      
+      // Reload products
+      const data = await getProducts();
+      setProducts(data);
+    } catch (error) {
+       console.error("Sale error", error);
+       toast.error("Ocurrió un error al procesar la venta.");
+    } finally {
+       setIsProcessing(false);
+    }
+  };
+
   const handleCheckout = async (paymentMethod: string) => {
     if (cart.length === 0) return;
+
+    if (paymentMethod === "CASH") {
+      setIsCashModalOpen(true);
+      return;
+    }
+
     setIsProcessing(true);
     try {
       const saleData = {
@@ -88,7 +150,6 @@ export default function POSTerminal() {
       setCart([]);
       toast.success("¡Venta completada con éxito!");
       
-      // Reload products to get updated stock
       const data = await getProducts();
       setProducts(data);
     } catch (error) {
@@ -110,7 +171,6 @@ export default function POSTerminal() {
       
       {/* Zona Izquierda: Buscador y Grilla Virtual */}
       <div className="flex-1 flex flex-col gap-4">
-        {/* Barra de Búsqueda Liquid */}
         <div className="liquid-glass-panel p-4 flex gap-4 items-center">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
@@ -127,7 +187,6 @@ export default function POSTerminal() {
             </button>
         </div>
 
-        {/* Grilla de Productos */}
         <div className="flex-1 liquid-glass-panel p-4 overflow-y-auto custom-scrollbar">
            <h3 className="text-lg font-bold mb-4 text-gray-800 dark:text-gray-100">Catálogo General</h3>
            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -172,6 +231,16 @@ export default function POSTerminal() {
                   <option value="">Cliente Genérico (Contado)</option>
                   {clients.map(c => <option key={c.id} value={c.id}>{c.name} - {c.identification}</option>)}
               </select>
+           </div>
+           <div className="flex items-center gap-2">
+             <input 
+               type="checkbox" 
+               id="credit" 
+               checked={isCredit} 
+               onChange={(e) => setIsCredit(e.target.checked)} 
+               className="rounded" 
+             />
+             <label htmlFor="credit" className="text-sm text-gray-700 dark:text-gray-300">Venta a Crédito</label>
            </div>
         </div>
 
@@ -240,9 +309,116 @@ export default function POSTerminal() {
                  <CreditCard size={20} />
                  {isProcessing ? 'Procesando...' : 'Tarjeta'}
               </button>
+              <button 
+                 onClick={() => handleCheckout("SIMPE_MOVIL")}
+                 disabled={cart.length === 0 || isProcessing} 
+                 className="bg-gradient-to-tr from-green-700 to-green-500 text-white font-medium rounded-lg px-4 py-3 shadow-[0_4px_14px_0_rgba(34,197,94,0.39)] hover:shadow-lg transform transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                 <Smartphone size={20} />
+                 {isProcessing ? 'Procesando...' : 'SIMPE Móvil'}
+              </button>
+              <button 
+                 onClick={() => handleCheckout("CREDIT")}
+                 disabled={cart.length === 0 || isProcessing || !selectedClientId} 
+                 className="bg-gradient-to-tr from-purple-700 to-purple-500 text-white font-medium rounded-lg px-4 py-3 shadow-[0_4px_14px_0_rgba(147,51,234,0.39)] hover:shadow-lg transform transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                 <CreditCard size={20} />
+                 {isProcessing ? 'Procesando...' : 'Crédito'}
+              </button>
            </div>
         </div>
       </div>
+
+      {/* Modal de Pago en Efectivo */}
+      <AnimatePresence>
+        {isCashModalOpen && (
+          <motion.div initial={{opacity: 0}} animate={{opacity: 1}} exit={{opacity: 0}} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div 
+              initial={{scale: 0.9, opacity: 0}} 
+              animate={{scale: 1, opacity: 1}} 
+              exit={{scale: 0.9, opacity: 0}}
+              className="bg-white dark:bg-gray-900 rounded-2xl p-8 w-full max-w-md shadow-2xl"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-2xl font-bold dark:text-white">Pago en Efectivo</h3>
+                <button
+                  onClick={() => {
+                    setIsCashModalOpen(false);
+                    setCashAmount('');
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div className="space-y-4 mb-6">
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Monto a Pagar</p>
+                  <p className="text-4xl font-bold text-agro-green">₡{total.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Monto Recibido
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="Ingresa el monto..."
+                    value={cashAmount}
+                    onChange={(e) => setCashAmount(e.target.value)}
+                    className="liquid-input w-full text-lg"
+                    autoFocus
+                  />
+                </div>
+
+                {cashAmount && parseFloat(cashAmount) >= total && (
+                  <motion.div 
+                    initial={{opacity: 0, y: -10}}
+                    animate={{opacity: 1, y: 0}}
+                    className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800"
+                  >
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Vuelto</p>
+                    <p className="text-3xl font-bold text-green-600 dark:text-green-400">
+                      ₡{((parseFloat(cashAmount) || 0) - total).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                    </p>
+                  </motion.div>
+                )}
+
+                {cashAmount && parseFloat(cashAmount) < total && (
+                  <motion.div 
+                    initial={{opacity: 0, y: -10}}
+                    animate={{opacity: 1, y: 0}}
+                    className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800"
+                  >
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Falta</p>
+                    <p className="text-3xl font-bold text-red-600 dark:text-red-400">
+                      ₡{(total - (parseFloat(cashAmount) || 0)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                    </p>
+                  </motion.div>
+                )}
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setIsCashModalOpen(false);
+                    setCashAmount('');
+                  }}
+                  className="flex-1 px-4 py-3 text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors font-medium"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleCashPayment}
+                  disabled={isProcessing || !cashAmount || parseFloat(cashAmount) < total}
+                  className="flex-1 liquid-btn-primary disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                >
+                  {isProcessing ? 'Procesando...' : 'Confirmar Pago'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
