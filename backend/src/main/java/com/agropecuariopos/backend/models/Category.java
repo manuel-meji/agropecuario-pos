@@ -1,5 +1,6 @@
 package com.agropecuariopos.backend.models;
 
+import org.hibernate.envers.Audited;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -12,6 +13,7 @@ import lombok.Setter;
 @Entity
 @Getter
 @Setter
+@Audited
 public class Category {
 
     @Id

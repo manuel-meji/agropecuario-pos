@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Barcode, Trash2, Plus, Minus, CreditCard, Banknote, ShoppingCart, User, Smartphone, X } from 'lucide-react';
+import { Search, Barcode, Plus, Minus, CreditCard, Banknote, ShoppingCart, User, Smartphone, X, Wallet } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getProducts, createSale, getClients } from '../../services/api';
 
@@ -14,7 +14,6 @@ export default function POSTerminal() {
   const [isCredit, setIsCredit] = useState(false);
   const [isCashModalOpen, setIsCashModalOpen] = useState(false);
   const [cashAmount, setCashAmount] = useState('');
-  const [changeAmount, setChangeAmount] = useState(0);
 
   useEffect(() => {
     const loadData = async () => {
@@ -80,12 +79,11 @@ export default function POSTerminal() {
     }
     
     if (paidAmount < total) {
-      toast.error(`El monto es insuficiente. Faltam ₡${(total - paidAmount).toLocaleString(undefined, { maximumFractionDigits: 2 })}`);
+      toast.error(`El monto es insuficiente. Faltan ₡${(total - paidAmount).toLocaleString(undefined, { maximumFractionDigits: 2 })}`);
       return;
     }
 
     const change = paidAmount - total;
-    setChangeAmount(change);
 
     // Process the sale
     setIsProcessing(true);
@@ -102,16 +100,24 @@ export default function POSTerminal() {
         }))
       };
       
-      await createSale(saleData);
+      const response = await createSale(saleData);
       
-      // Show change modal
       toast.success(`¡Venta completada! Vuelto: ₡${change.toLocaleString(undefined, { maximumFractionDigits: 2 })}`);
+      
+      const selectedClient = clients.find(c => c.id.toString() === selectedClientId);
+      if (window.confirm(`Venta procesada con éxito.\nVuelto a entregar: ₡${change.toLocaleString()}\n\n¿Deseas generar la factura en PDF?`)) {
+          import('../../utils/pdfGenerator').then(({ generateInvoicePDF }) => {
+              generateInvoicePDF(response, cart, selectedClient);
+          }).catch(err => {
+              console.error("PDF Gen error:", err);
+              toast.error("Error al generar el PDF de la factura");
+          });
+      }
       
       // Reset state
       setCart([]);
       setCashAmount('');
-      setChangeAmount(0);
-      setTimeout(() => setIsCashModalOpen(false), 1500);
+      setTimeout(() => setIsCashModalOpen(false), 500);
       
       // Reload products
       const data = await getProducts();
@@ -146,9 +152,20 @@ export default function POSTerminal() {
         }))
       };
       
-      await createSale(saleData);
-      setCart([]);
+      const response = await createSale(saleData);
       toast.success("¡Venta completada con éxito!");
+      
+      const selectedClient = clients.find(c => c.id.toString() === selectedClientId);
+      if (window.confirm('Venta procesada con éxito.\n¿Deseas generar la factura en PDF?')) {
+          import('../../utils/pdfGenerator').then(({ generateInvoicePDF }) => {
+              generateInvoicePDF(response, cart, selectedClient);
+          }).catch(err => {
+              console.error("PDF Gen error:", err);
+              toast.error("Error al generar el PDF de la factura");
+          });
+      }
+
+      setCart([]);
       
       const data = await getProducts();
       setProducts(data);
@@ -160,265 +177,431 @@ export default function POSTerminal() {
     }
   };
 
+  const [showPaymentMethods, setShowPaymentMethods] = useState(false);
+  const [clientSearchTerm, setClientSearchTerm] = useState('');
+  const [isClientPickerOpen, setIsClientPickerOpen] = useState(false);
+
   const filteredProducts = products.filter(p => 
     p.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
     p.cabysCode?.includes(searchTerm) || 
     p.internalCode?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const filteredClients = clients.filter(c => 
+    c.name?.toLowerCase().includes(clientSearchTerm.toLowerCase()) ||
+    c.identification?.includes(clientSearchTerm)
+  );
+
+  const selectedClient = clients.find(c => c.id.toString() === selectedClientId);
+
   return (
-    <div className="flex flex-col lg:flex-row h-[calc(100vh-8rem)] gap-6">
+    <div className="flex flex-col lg:flex-row h-full gap-8">
       
       {/* Zona Izquierda: Buscador y Grilla Virtual */}
-      <div className="flex-1 flex flex-col gap-4">
-        <div className="liquid-glass-panel p-4 flex gap-4 items-center">
+      <div className="flex-1 flex flex-col gap-6">
+        <div className="premium-panel p-2 flex gap-2 items-center">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+              <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
               <input 
                 type="text" 
                 placeholder="Buscar por Nombre, CABYS o Código Interno..." 
-                className="liquid-input pl-10 w-full"
+                className="w-full bg-transparent border-none rounded-2xl px-14 py-4 focus:ring-0 outline-none text-slate-800 dark:text-white placeholder:text-slate-400 font-medium"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <button className="p-3 bg-white/50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-              <Barcode className="text-gray-600 dark:text-gray-300" />
+            <button className="p-4 bg-slate-100 dark:bg-slate-800 rounded-2xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors mr-1">
+              <Barcode className="text-slate-600 dark:text-slate-300" size={22} />
             </button>
         </div>
 
-        <div className="flex-1 liquid-glass-panel p-4 overflow-y-auto custom-scrollbar">
-           <h3 className="text-lg font-bold mb-4 text-gray-800 dark:text-gray-100">Catálogo General</h3>
-           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-              {filteredProducts.map(prod => (
-                 <button 
-                  key={prod.id} 
-                  onClick={() => addToCart(prod)}
-                  disabled={prod.stockQuantity <= 0}
-                  className={`flex flex-col text-left bg-white/40 dark:bg-gray-800/40 p-4 rounded-xl border border-white/20 dark:border-gray-700/50 hover:border-agro-green/50 hover:shadow-lg transition-all active:scale-95 group ${prod.stockQuantity <= 0 ? 'opacity-50 cursor-not-allowed filter grayscale' : ''}`}
-                 >
-                    <span className="text-xs text-gray-500 mb-1 font-mono">CABYS: {prod.cabysCode}</span>
-                    <span className="font-semibold text-gray-800 dark:text-gray-100 mb-2 group-hover:text-agro-green transition-colors leading-tight line-clamp-2">{prod.name}</span>
-                    <div className="mt-auto flex justify-between items-end w-full">
-                       <span className="text-lg font-bold text-agro-green">₡{prod.salePrice?.toLocaleString()}</span>
-                       <span className={`text-xs px-2 py-1 rounded-full font-medium ${prod.stockQuantity > 0 ? 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300' : 'bg-red-100 text-red-600 dark:bg-red-900/30'}`}>
-                         Stock: {prod.stockQuantity}
-                       </span>
+        <div className="flex-1 premium-panel p-6 overflow-hidden flex flex-col">
+           <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Catálogo de Productos</h3>
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-widest bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">{filteredProducts.length} Ítems</span>
+           </div>
+           
+           <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 pb-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-5">
+                 {filteredProducts.map(prod => (
+                    <motion.button 
+                     layout
+                     initial={{ opacity: 0, scale: 0.9 }}
+                     animate={{ opacity: 1, scale: 1 }}
+                     key={prod.id} 
+                     onClick={() => addToCart(prod)}
+                     disabled={prod.stockQuantity <= 0}
+                     className={`flex flex-col text-left premium-card p-5 group ${prod.stockQuantity <= 0 ? 'opacity-40 cursor-not-allowed grayscale' : ''}`}
+                    >
+                       <span className="text-[10px] text-slate-400 mb-2 font-bold uppercase tracking-wider">SKU: {prod.internalCode || 'N/A'}</span>
+                       <span className="font-bold text-slate-800 dark:text-slate-100 mb-4 group-hover:text-premium-emerald transition-colors leading-tight line-clamp-2 h-10">{prod.name}</span>
+                       
+                       <div className="mt-auto pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center w-full">
+                          <span className="text-xl font-black text-slate-900 dark:text-white">₡{prod.salePrice?.toLocaleString()}</span>
+                          <div className={`p-1.5 rounded-lg ${prod.stockQuantity > 5 ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600' : 'bg-amber-50 dark:bg-amber-900/20 text-amber-600'}`}>
+                             <p className="text-[10px] font-black">{prod.stockQuantity}</p>
+                          </div>
+                       </div>
+                    </motion.button>
+                 ))}
+                 {filteredProducts.length === 0 && (
+                    <div className="col-span-full flex flex-col items-center justify-center py-20 opacity-40">
+                       <Search size={48} className="mb-4" />
+                       <p className="font-bold">No se encontraron productos</p>
                     </div>
-                 </button>
-              ))}
-              {filteredProducts.length === 0 && (
-                 <p className="col-span-full text-center text-gray-400 p-8">No se encontraron productos.</p>
-              )}
+                 )}
+              </div>
            </div>
         </div>
       </div>
 
-      {/* Zona Derecha: Ticket de Facturación */}
-      <div className="w-full lg:w-[400px] xl:w-[450px] liquid-glass-panel flex flex-col">
-        <div className="p-4 border-b border-gray-200 dark:border-gray-800 bg-black/5 dark:bg-white/5 rounded-t-xl gap-3 flex flex-col">
-           <h2 className="text-xl font-bold flex items-center justify-between">
-              Ticket Actual
-              <span className="text-sm font-normal text-gray-500 bg-white dark:bg-gray-900 px-3 py-1 rounded-full shadow-sm">POS 4.0</span>
-           </h2>
-           <div className="flex bg-white dark:bg-gray-900 rounded-lg p-2 border border-gray-200 dark:border-gray-800 items-center gap-2">
-              <User size={16} className="text-gray-400" />
-              <select 
-                className="bg-transparent text-sm w-full outline-none text-gray-700 dark:text-gray-300"
-                value={selectedClientId}
-                onChange={(e) => setSelectedClientId(e.target.value)}
-              >
-                  <option value="">Cliente Genérico (Contado)</option>
-                  {clients.map(c => <option key={c.id} value={c.id}>{c.name} - {c.identification}</option>)}
-              </select>
-           </div>
-           <div className="flex items-center gap-2">
-             <input 
-               type="checkbox" 
-               id="credit" 
-               checked={isCredit} 
-               onChange={(e) => setIsCredit(e.target.checked)} 
-               className="rounded" 
-             />
-             <label htmlFor="credit" className="text-sm text-gray-700 dark:text-gray-300">Venta a Crédito</label>
-           </div>
-        </div>
-
-        {/* Lista de Items */}
-        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-3">
-           {cart.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-gray-400 opacity-60">
-                 <ShoppingCart size={48} className="mb-4" />
-                 <p>El carrito está vacío</p>
-                 <p className="text-sm mt-2">Haz clic en un producto para agregarlo.</p>
-              </div>
-           ) : (
-             cart.map(item => (
-                <div key={item.product.id} className="flex flex-col bg-white/50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-100 dark:border-gray-700 shadow-sm">
-                   <div className="flex justify-between items-start mb-2">
-                      <span className="font-medium text-gray-800 dark:text-gray-100 text-sm">{item.product.name}</span>
-                      <button onClick={() => removeFromCart(item.product.id)} className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 p-1 rounded-md transition-colors">
-                        <Trash2 size={16} />
-                      </button>
-                   </div>
-                   <div className="flex justify-between items-center mt-1">
-                      <div className="flex items-center gap-2 bg-white dark:bg-gray-900 rounded-lg p-1 shadow-sm border border-gray-100 dark:border-gray-800">
-                         <button onClick={() => updateQty(item.product.id, -1)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"><Minus size={14} /></button>
-                         <span className="w-6 text-center text-sm font-bold">{item.qty}</span>
-                         <button onClick={() => updateQty(item.product.id, 1)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded text-agro-green" disabled={item.qty >= item.product.stockQuantity}><Plus size={14} /></button>
-                      </div>
-                      <div className="flex flex-col items-end">
-                         <span className="font-bold text-gray-800 dark:text-gray-100">₡{(item.product.salePrice * item.qty).toLocaleString()}</span>
-                         <span className="text-[10px] text-gray-500">IVA {item.product.isAgro ? '1%' : '13%'}</span>
-                      </div>
-                   </div>
+      {/* Zona Derecha: Checkout Sidebar */}
+      <div className="w-full lg:w-[450px] flex flex-col gap-6 h-full">
+        <div className="premium-panel flex-1 flex flex-col overflow-hidden bg-white dark:bg-slate-900/60">
+          <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col gap-4">
+             <div className="flex items-center justify-between">
+                <h2 className="text-xl font-black text-slate-900 dark:text-white">Resumen de Venta</h2>
+                <div className="w-10 h-10 emerald-gradient rounded-2xl flex items-center justify-center text-white shadow-lg shadow-premium-emerald/30">
+                   <ShoppingCart size={20} />
                 </div>
-             ))
-           )}
-        </div>
+             </div>
 
-        {/* Totales y Botones de Pago */}
-        <div className="p-5 border-t border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-gray-900/50 rounded-b-xl border-dashed">
-           <div className="space-y-2 mb-6">
-              <div className="flex justify-between text-gray-600 dark:text-gray-400 text-sm">
-                 <span>Subtotal</span>
-                 <span>₡{subtotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
-              </div>
-              <div className="flex justify-between text-gray-600 dark:text-gray-400 text-sm">
-                 <span>Impuestos (IVA Ley 9635)</span>
-                 <span>₡{tax.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
-              </div>
-              <div className="flex justify-between text-2xl font-bold text-gray-900 dark:text-white mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                 <span>Total Pago</span>
-                 <span className="text-agro-green">₡{total.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
-              </div>
-           </div>
+             <div className="relative space-y-3">
+               <button 
+                onClick={() => setIsClientPickerOpen(!isClientPickerOpen)}
+                className="w-full flex items-center gap-3 bg-slate-100 dark:bg-slate-800 p-2 rounded-2xl border border-black/5 dark:border-white/5 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-left"
+               >
+                  <div className="w-9 h-9 bg-white dark:bg-slate-900 rounded-xl flex items-center justify-center shadow-sm shrink-0">
+                    <User size={18} className={selectedClient ? "text-premium-emerald" : "text-slate-400"} />
+                  </div>
+                  <div className="flex flex-col overflow-hidden">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Cliente</span>
+                    <span className="text-sm font-bold text-slate-800 dark:text-white truncate">
+                      {selectedClient ? selectedClient.name : "Cliente Genérico (Contado)"}
+                    </span>
+                  </div>
+                  {selectedClientId && (
+                    <X 
+                      size={14} 
+                      className="ml-auto mr-2 text-slate-400 hover:text-rose-500 transition-colors" 
+                      onClick={(e) => { e.stopPropagation(); setSelectedClientId(''); setIsCredit(false); }}
+                    />
+                  )}
+               </button>
 
-           <div className="grid grid-cols-2 gap-3">
-              <button 
-                 onClick={() => handleCheckout("CASH")}
-                 disabled={cart.length === 0 || isProcessing} 
-                 className="liquid-btn-primary flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                 <Banknote size={20} />
-                 {isProcessing ? 'Procesando...' : 'Efectivo'}
-              </button>
-              <button 
-                 onClick={() => handleCheckout("CARD")}
-                 disabled={cart.length === 0 || isProcessing} 
-                 className="bg-gradient-to-tr from-blue-700 to-blue-500 text-white font-medium rounded-lg px-4 py-3 shadow-[0_4px_14px_0_rgba(59,130,246,0.39)] hover:shadow-lg transform transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                 <CreditCard size={20} />
-                 {isProcessing ? 'Procesando...' : 'Tarjeta'}
-              </button>
-              <button 
-                 onClick={() => handleCheckout("SINPE_MOVIL")}
-                 disabled={cart.length === 0 || isProcessing} 
-                 className="bg-gradient-to-tr from-green-700 to-green-500 text-white font-medium rounded-lg px-4 py-3 shadow-[0_4px_14px_0_rgba(34,197,94,0.39)] hover:shadow-lg transform transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                 <Smartphone size={20} />
-                 {isProcessing ? 'Procesando...' : 'SINPE Móvil'}
-              </button>
-              <button 
-                 onClick={() => handleCheckout("CREDIT")}
-                 disabled={cart.length === 0 || isProcessing || !selectedClientId} 
-                 className="bg-gradient-to-tr from-purple-700 to-purple-500 text-white font-medium rounded-lg px-4 py-3 shadow-[0_4px_14px_0_rgba(147,51,234,0.39)] hover:shadow-lg transform transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                 <CreditCard size={20} />
-                 {isProcessing ? 'Procesando...' : 'Crédito'}
-              </button>
-           </div>
+               {/* Toggle Venta a Crédito */}
+               <div 
+                  onClick={() => {
+                    if (!selectedClientId) {
+                      toast.error("Selecciona un cliente para habilitar crédito");
+                      return;
+                    }
+                    setIsCredit(!isCredit);
+                  }}
+                  className={`flex items-center justify-between p-4 rounded-2xl cursor-pointer transition-all border ${isCredit ? 'bg-premium-emerald/5 border-premium-emerald/20 text-premium-emerald' : 'bg-slate-50 dark:bg-slate-800/50 border-transparent text-slate-500'}`}
+               >
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-xl ${isCredit ? 'bg-premium-emerald text-white' : 'bg-white dark:bg-slate-900 text-slate-400'}`}>
+                      <Wallet size={16} />
+                    </div>
+                    <span className="text-sm font-bold">Venta a Crédito</span>
+                  </div>
+                  <div className={`w-12 h-6 rounded-full relative transition-colors duration-300 ${isCredit ? 'bg-premium-emerald' : 'bg-slate-300 dark:bg-slate-700'}`}>
+                    <motion.div 
+                      animate={{ x: isCredit ? 24 : 4 }}
+                      className="absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm"
+                    />
+                  </div>
+               </div>
+
+               <AnimatePresence>
+                 {isClientPickerOpen && (
+                   <motion.div 
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    className="absolute top-full left-0 right-0 mt-2 z-50 bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden flex flex-col max-h-[400px]"
+                   >
+                     <div className="p-4 border-b border-slate-50 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50">
+                        <div className="relative">
+                          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <input 
+                            type="text" 
+                            autoFocus
+                            placeholder="Buscar cliente por nombre o ID..."
+                            className="w-full bg-white dark:bg-slate-800 rounded-xl pl-9 pr-4 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-premium-emerald/20 transition-all text-slate-900 dark:text-white"
+                            value={clientSearchTerm}
+                            onChange={(e) => setClientSearchTerm(e.target.value)}
+                          />
+                        </div>
+                     </div>
+                     <div className="overflow-y-auto custom-scrollbar p-2">
+                        <button 
+                          onClick={() => { setSelectedClientId(''); setIsClientPickerOpen(false); setIsCredit(false); }}
+                          className="w-full p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 text-left transition-colors flex flex-col"
+                        >
+                          <span className="text-sm font-bold text-slate-800 dark:text-white">Cliente Genérico</span>
+                          <span className="text-[10px] text-slate-400 font-bold uppercase">Transacción de Contado</span>
+                        </button>
+                        {filteredClients.map(c => (
+                          <button 
+                            key={c.id}
+                            onClick={() => { setSelectedClientId(c.id.toString()); setIsClientPickerOpen(false); setClientSearchTerm(''); }}
+                            className={`w-full p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 text-left transition-colors flex flex-col mt-1 ${selectedClientId === c.id.toString() ? 'bg-premium-emerald/10 border border-premium-emerald/20' : ''}`}
+                          >
+                            <span className="text-sm font-bold text-slate-800 dark:text-white">{c.name}</span>
+                            <span className="text-[10px] text-slate-400 font-bold uppercase">ID: {c.identification || 'N/A'}</span>
+                          </button>
+                        ))}
+                        {filteredClients.length === 0 && (
+                          <div className="p-8 text-center opacity-30">
+                            <User size={24} className="mx-auto mb-2" />
+                            <p className="text-xs font-black uppercase">Sin resultados</p>
+                          </div>
+                        )}
+                     </div>
+                   </motion.div>
+                 )}
+               </AnimatePresence>
+             </div>
+          </div>
+
+          {/* Cart Items List */}
+          <div className="flex-1 overflow-y-auto p-6 custom-scrollbar space-y-4">
+             <AnimatePresence>
+               {cart.length === 0 ? (
+                  <motion.div 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="h-full flex flex-col items-center justify-center text-slate-300 dark:text-slate-600"
+                  >
+                     <div className="w-20 h-20 bg-slate-50 dark:bg-slate-800/50 rounded-[30px] flex items-center justify-center mb-4">
+                        <ShoppingCart size={32} />
+                     </div>
+                     <p className="font-bold">El carrito está vacío</p>
+                     <p className="text-xs mt-1 text-slate-400">Selecciona productos de la grilla</p>
+                  </motion.div>
+               ) : (
+                 cart.map(item => (
+                    <motion.div 
+                      layout
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      key={item.product.id} 
+                      className="flex gap-4 p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-black/5 dark:border-white/5"
+                    >
+                       <div className="flex-1">
+                          <p className="font-bold text-slate-800 dark:text-slate-100 text-sm mb-3">{item.product.name}</p>
+                          <div className="flex items-center gap-3">
+                             <div className="flex items-center bg-white dark:bg-slate-900 p-1 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
+                                <button onClick={() => updateQty(item.product.id, -1)} className="p-1 px-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"><Minus size={14} /></button>
+                                <span className="min-w-6 text-center text-sm font-black text-slate-900 dark:text-white px-1">{item.qty}</span>
+                                <button onClick={() => updateQty(item.product.id, 1)} className="p-1 px-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-premium-emerald transition-colors" disabled={item.qty >= item.product.stockQuantity}><Plus size={14} /></button>
+                             </div>
+                             <span className="text-xs font-bold text-slate-400">x ₡{item.product.salePrice.toLocaleString()}</span>
+                          </div>
+                       </div>
+                       <div className="flex flex-col items-end justify-between">
+                          <button onClick={() => removeFromCart(item.product.id)} className="text-slate-300 hover:text-red-500 transition-colors p-1">
+                            <X size={18} />
+                          </button>
+                          <span className="font-black text-slate-950 dark:text-white">₡{(item.product.salePrice * item.qty).toLocaleString()}</span>
+                       </div>
+                    </motion.div>
+                 ))
+               )}
+             </AnimatePresence>
+          </div>
+
+          {/* Pricing & Checkout Section */}
+          <div className="bg-white dark:bg-slate-950 border-t border-slate-100 dark:border-slate-800 p-8">
+             <div className="space-y-3 mb-6">
+                <div className="flex justify-between text-slate-400 dark:text-slate-500 text-[10px] font-black uppercase tracking-[0.2em]">
+                   <span>Subtotal</span>
+                   <span className="text-slate-900 dark:text-white">₡{subtotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                </div>
+                <div className="flex justify-between text-slate-400 dark:text-slate-500 text-[10px] font-black uppercase tracking-[0.2em]">
+                   <span>Impuestos (IVA)</span>
+                   <span className="text-slate-900 dark:text-white">₡{tax.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                </div>
+             </div>
+
+             <AnimatePresence mode="wait">
+               {!showPaymentMethods ? (
+                 <motion.button
+                    key="pay-button"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    onClick={() => setShowPaymentMethods(true)}
+                    disabled={cart.length === 0}
+                    className="w-full btn-premium-emerald py-6 flex flex-col items-center justify-center gap-1 group disabled:opacity-30"
+                 >
+                    <span className="text-xs font-black uppercase tracking-widest opacity-70">Confirmar y Pagar</span>
+                    <span className="text-2xl font-black">₡{total.toLocaleString()}</span>
+                 </motion.button>
+               ) : (
+                 <motion.div
+                    key="payment-options"
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="space-y-4"
+                 >
+                    <div className="flex items-center justify-between mb-2">
+                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Seleccionar Método</span>
+                       <button onClick={() => setShowPaymentMethods(false)} className="text-[10px] font-black text-premium-emerald uppercase tracking-widest hover:underline text-rose-500">Volver al Carrito</button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                       <button 
+                          onClick={() => handleCheckout("CASH")}
+                          className="bg-slate-900 dark:bg-white text-white dark:text-slate-950 font-black rounded-2xl py-4 flex items-center justify-center gap-2 hover:scale-[1.02] transition-all">
+                          <Banknote size={18} />
+                          Efectivo
+                       </button>
+                       <button 
+                          onClick={() => handleCheckout("CARD")}
+                          className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-black rounded-2xl py-4 border border-slate-200 dark:border-slate-800 flex items-center justify-center gap-2 hover:scale-[1.02] transition-all">
+                          <CreditCard size={18} />
+                          Tarjeta
+                       </button>
+                       <button 
+                          onClick={() => handleCheckout("SINPE_MOVIL")}
+                          className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-black rounded-2xl py-4 border border-slate-200 dark:border-slate-800 flex items-center justify-center gap-2 hover:scale-[1.02] transition-all">
+                          <Smartphone size={18} />
+                          SINPE
+                       </button>
+                       <button 
+                          onClick={() => handleCheckout("CREDIT")}
+                          disabled={!selectedClientId}
+                          className="btn-premium-emerald py-4 flex items-center justify-center gap-2 hover:scale-[1.02] transition-all disabled:opacity-30">
+                          <Wallet size={18} />
+                          Crédito
+                       </button>
+                    </div>
+                 </motion.div>
+               )}
+             </AnimatePresence>
+          </div>
         </div>
       </div>
 
-      {/* Modal de Pago en Efectivo */}
+      {/* Modern Payment Modal */}
       <AnimatePresence>
         {isCashModalOpen && (
-          <motion.div initial={{opacity: 0}} animate={{opacity: 1}} exit={{opacity: 0}} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
             <motion.div 
-              initial={{scale: 0.9, opacity: 0}} 
-              animate={{scale: 1, opacity: 1}} 
-              exit={{scale: 0.9, opacity: 0}}
-              className="bg-white dark:bg-gray-900 rounded-2xl p-8 w-full max-w-md shadow-2xl"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsCashModalOpen(false)}
+              className="absolute inset-0 bg-slate-950/60 backdrop-blur-md"
+            ></motion.div>
+            
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }} 
+              animate={{ scale: 1, opacity: 1, y: 0 }} 
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="bg-white dark:bg-slate-900 rounded-[40px] p-10 w-full max-w-xl shadow-2xl relative z-10 overflow-hidden"
             >
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-2xl font-bold dark:text-white">Pago en Efectivo</h3>
+              {/* Background Glow */}
+              <div className="absolute top-[-100px] left-[-100px] w-64 h-64 bg-premium-emerald/20 blur-[80px] rounded-full"></div>
+
+              <div className="flex justify-between items-center mb-10 relative">
+                <div>
+                  <h3 className="text-3xl font-black text-slate-900 dark:text-white">Pago en Efectivo</h3>
+                  <p className="text-slate-500 font-medium">Completa la transacción del cliente</p>
+                </div>
                 <button
-                  onClick={() => {
-                    setIsCashModalOpen(false);
-                    setCashAmount('');
-                  }}
-                  className="text-gray-400 hover:text-gray-600"
+                  onClick={() => setIsCashModalOpen(false)}
+                  className="w-12 h-12 flex items-center justify-center bg-slate-100 dark:bg-slate-800 rounded-2xl text-slate-500 hover:text-slate-800 transition-colors"
                 >
                   <X size={24} />
                 </button>
               </div>
 
-              <div className="space-y-4 mb-6">
-                <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Monto a Pagar</p>
-                  <p className="text-4xl font-bold text-agro-green">₡{total.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
+              <div className="space-y-8 relative">
+                <div className="bg-slate-50 dark:bg-slate-950 p-8 rounded-3xl border border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                  <div>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Monto a Cobrar</p>
+                    <p className="text-4xl font-black text-slate-900 dark:text-white">₡{total.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
+                  </div>
+                  <div className="w-16 h-16 bg-premium-emerald/10 rounded-2xl flex items-center justify-center text-premium-emerald">
+                    <Banknote size={32} />
+                  </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 ml-2">
                     Monto Recibido
                   </label>
-                  <input
-                    type="number"
-                    placeholder="Ingresa el monto..."
-                    value={cashAmount}
-                    onChange={(e) => setCashAmount(e.target.value)}
-                    className="liquid-input w-full text-lg"
-                    autoFocus
-                  />
+                  <div className="relative">
+                     <span className="absolute left-6 top-1/2 -translate-y-1/2 text-3xl font-black text-slate-400">₡</span>
+                     <input
+                       type="number"
+                       placeholder="0.00"
+                       value={cashAmount}
+                       onChange={(e) => setCashAmount(e.target.value)}
+                       className="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-[28px] pl-16 pr-8 py-8 text-4xl font-black text-slate-900 dark:text-white focus:ring-4 focus:ring-premium-emerald/10 outline-none transition-all"
+                       autoFocus
+                     />
+                  </div>
                 </div>
 
-                {cashAmount && parseFloat(cashAmount) >= total && (
-                  <motion.div 
-                    initial={{opacity: 0, y: -10}}
-                    animate={{opacity: 1, y: 0}}
-                    className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800"
-                  >
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Vuelto</p>
-                    <p className="text-3xl font-bold text-green-600 dark:text-green-400">
-                      ₡{((parseFloat(cashAmount) || 0) - total).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                    </p>
-                  </motion.div>
-                )}
+                <AnimatePresence>
+                  {cashAmount && (
+                    <motion.div 
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="overflow-hidden"
+                    >
+                      {parseFloat(cashAmount) >= total ? (
+                        <div className="p-8 bg-emerald-50 dark:bg-emerald-900/20 rounded-3xl border-2 border-emerald-100 dark:border-emerald-800 flex justify-between items-center">
+                          <div>
+                            <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-1">Vuelto a entregar</p>
+                            <p className="text-5xl font-black text-emerald-600">
+                              ₡{(parseFloat(cashAmount) - total).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                            </p>
+                          </div>
+                          <div className="w-20 h-20 bg-emerald-500/10 rounded-full flex items-center justify-center text-emerald-500 border-4 border-emerald-500/20">
+                             <Plus size={32} className="rotate-45" />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-8 bg-amber-50 dark:bg-amber-900/20 rounded-3xl border-2 border-amber-100 dark:border-amber-800">
+                          <p className="text-xs font-bold text-amber-600 uppercase tracking-widest mb-1">Faltante</p>
+                          <p className="text-4xl font-black text-amber-600">
+                            ₡{(total - parseFloat(cashAmount)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
-                {cashAmount && parseFloat(cashAmount) < total && (
-                  <motion.div 
-                    initial={{opacity: 0, y: -10}}
-                    animate={{opacity: 1, y: 0}}
-                    className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800"
+                <div className="flex gap-4 pt-4">
+                  <button
+                    onClick={() => setIsCashModalOpen(false)}
+                    className="flex-1 px-8 py-5 text-slate-500 dark:text-slate-400 font-bold rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                   >
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Falta</p>
-                    <p className="text-3xl font-bold text-red-600 dark:text-red-400">
-                      ₡{(total - (parseFloat(cashAmount) || 0)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                    </p>
-                  </motion.div>
-                )}
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setIsCashModalOpen(false);
-                    setCashAmount('');
-                  }}
-                  className="flex-1 px-4 py-3 text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors font-medium"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleCashPayment}
-                  disabled={isProcessing || !cashAmount || parseFloat(cashAmount) < total}
-                  className="flex-1 liquid-btn-primary disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-                >
-                  {isProcessing ? 'Procesando...' : 'Confirmar Pago'}
-                </button>
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleCashPayment}
+                    disabled={isProcessing || !cashAmount || parseFloat(cashAmount) < total}
+                    className="flex-1 bg-slate-950 dark:bg-white text-white dark:text-slate-950 font-black text-lg py-5 rounded-2xl shadow-2xl disabled:opacity-30 disabled:grayscale transition-all hover:scale-[1.02] active:scale-[0.98]"
+                  >
+                    {isProcessing ? 'Procesando...' : 'Confirmar Venta'}
+                  </button>
+                </div>
               </div>
             </motion.div>
-          </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>
   );
 }
+

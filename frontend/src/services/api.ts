@@ -11,6 +11,8 @@ export const getProducts = () => api.get('/products').then(res => res.data);
 export const createProduct = (product: any) => api.post('/products', product).then(res => res.data);
 export const getCategories = () => api.get('/categories').then(res => res.data);
 export const createCategory = (category: any) => api.post('/categories', category).then(res => res.data);
+export const updateCategory = (id: number, category: any) => api.put(`/categories/${id}`, category).then(res => res.data);
+export const deleteCategory = (id: number) => api.delete(`/categories/${id}`).then(res => res.data);
 export const updateProduct = (id: number, product: any) => api.put(`/products/${id}`, product).then(res => res.data);
 export const createSale = (saleData: any) => api.post('/sales', saleData).then(res => res.data);
 export const getSales = () => api.get('/sales').then(res => res.data);
@@ -23,6 +25,7 @@ export const getReceivablesByClient = () => api.get('/accounts-receivable/by-cli
 export const getClientHistory = (clientName: string) => api.get(`/accounts-receivable/${encodeURIComponent(clientName)}/history`).then(res => res.data);
 export const getClientHistoryByClientId = (clientId: number) => api.get(`/clients/${clientId}/history`).then(res => res.data);
 export const makePayment = (id: number, amount: number) => api.post(`/accounts-receivable/${id}/pay`, { amount }).then(res => res.data);
+export const getPaymentRecords = () => api.get('/accounts-receivable/payments').then(res => res.data);
 
 export default api;
 

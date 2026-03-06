@@ -1,59 +1,413 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Filter, Plus, Package, AlertCircle } from 'lucide-react';
+import {
+  Search, Filter, Plus, Package, AlertCircle, Edit3, Tag,
+  PackageCheck, Barcode, Trash2, Pencil, Check, X, ChevronDown, LayoutGrid
+} from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getProducts, getCategories, createProduct, createCategory, updateProduct } from '../../services/api';
+import {
+  getProducts, getCategories, createProduct, createCategory,
+  updateProduct, updateCategory, deleteCategory
+} from '../../services/api';
 
+// ─── Searchable Category Select ────────────────────────────────────────────────
+function CategorySelect({ categories, value, onChange }: {
+  categories: any[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const dropRef = useRef<HTMLDivElement>(null);
+
+  const selected = categories.find(c => c.id.toString() === value);
+  const filtered = categories.filter(c =>
+    c.name.toLowerCase().includes(query.toLowerCase())
+  );
+
+  // Calcular posición fixed al abrir
+  const handleToggle = () => {
+    if (!open && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const dropH = 260; // altura estimada del dropdown
+      const goUp = spaceBelow < dropH && rect.top > dropH;
+
+      setDropdownStyle({
+        position: 'fixed',
+        left: rect.left,
+        width: rect.width,
+        zIndex: 9999,
+        ...(goUp
+          ? { bottom: window.innerHeight - rect.top + 4 }
+          : { top: rect.bottom + 4 }),
+      });
+    }
+    setOpen(o => !o);
+    setQuery('');
+  };
+
+  // Cerrar al hacer click fuera
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (
+        btnRef.current && !btnRef.current.contains(e.target as Node) &&
+        dropRef.current && !dropRef.current.contains(e.target as Node)
+      ) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  // Recalcular si se hace scroll o resize mientras está abierto
+  useEffect(() => {
+    if (!open) return;
+    const recalc = () => {
+      if (btnRef.current) {
+        const rect = btnRef.current.getBoundingClientRect();
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const dropH = 260;
+        const goUp = spaceBelow < dropH && rect.top > dropH;
+        setDropdownStyle(prev => ({
+          ...prev,
+          left: rect.left,
+          width: rect.width,
+          ...(goUp
+            ? { bottom: window.innerHeight - rect.top + 4, top: undefined }
+            : { top: rect.bottom + 4, bottom: undefined }),
+        }));
+      }
+    };
+    window.addEventListener('scroll', recalc, true);
+    window.addEventListener('resize', recalc);
+    return () => {
+      window.removeEventListener('scroll', recalc, true);
+      window.removeEventListener('resize', recalc);
+    };
+  }, [open]);
+
+  return (
+    <div className="relative">
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={handleToggle}
+        className="premium-input w-full flex items-center justify-between gap-2 text-left"
+      >
+        <span className={selected ? 'text-slate-900 dark:text-white font-bold' : 'text-slate-400'}>
+          {selected ? selected.name : '-- Seleccionar categoría --'}
+        </span>
+        <ChevronDown size={16} className={`text-slate-400 transition-transform shrink-0 ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            ref={dropRef}
+            initial={{ opacity: 0, scaleY: 0.95 }}
+            animate={{ opacity: 1, scaleY: 1 }}
+            exit={{ opacity: 0, scaleY: 0.95 }}
+            transition={{ duration: 0.12 }}
+            style={{ ...dropdownStyle, transformOrigin: 'top' }}
+            className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-700 overflow-hidden"
+          >
+            {/* Search inside dropdown */}
+            <div className="p-2 border-b border-slate-100 dark:border-slate-700">
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  autoFocus
+                  type="text"
+                  placeholder="Buscar categoría..."
+                  value={query}
+                  onChange={e => setQuery(e.target.value)}
+                  className="w-full pl-8 pr-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 rounded-xl outline-none text-slate-800 dark:text-white placeholder:text-slate-400"
+                />
+              </div>
+            </div>
+
+            {/* Options list */}
+            <div className="max-h-52 overflow-y-auto custom-scrollbar">
+              <button
+                type="button"
+                onClick={() => { onChange(''); setOpen(false); }}
+                className="w-full text-left px-4 py-2.5 text-sm text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+              >
+                -- Sin categoría --
+              </button>
+              {filtered.length === 0 && (
+                <p className="px-4 py-3 text-sm text-slate-400 text-center">Sin resultados</p>
+              )}
+              {filtered.map(c => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => { onChange(c.id.toString()); setOpen(false); setQuery(''); }}
+                  className={`w-full text-left px-4 py-2.5 text-sm flex items-center justify-between transition-colors
+                    ${value === c.id.toString()
+                      ? 'bg-premium-emerald/10 text-premium-emerald font-bold'
+                      : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+                >
+                  <span>{c.name}</span>
+                  {value === c.id.toString() && <Check size={14} />}
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+
+// ─── Category Manager Panel ─────────────────────────────────────────────────────
+function CategoryManagerPanel({ categories, onRefresh, onClose }: {
+  categories: any[];
+  onRefresh: () => void;
+  onClose: () => void;
+}) {
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [newName, setNewName] = useState('');
+  const [newDesc, setNewDesc] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState('');
+
+  const filtered = categories.filter(c =>
+    c.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const handleCreate = async () => {
+    if (!newName.trim()) { toast.error('El nombre es requerido'); return; }
+    setLoading(true);
+    try {
+      await createCategory({ name: newName.trim(), description: newDesc.trim() });
+      setNewName(''); setNewDesc('');
+      toast.success('Categoría creada');
+      onRefresh();
+    } catch { toast.error('Error al crear la categoría'); }
+    finally { setLoading(false); }
+  };
+
+  const handleUpdate = async (id: number) => {
+    if (!editName.trim()) { toast.error('El nombre es requerido'); return; }
+    setLoading(true);
+    try {
+      await updateCategory(id, { name: editName.trim(), description: editDesc.trim() });
+      setEditingId(null);
+      toast.success('Categoría actualizada');
+      onRefresh();
+    } catch { toast.error('Error al actualizar'); }
+    finally { setLoading(false); }
+  };
+
+  const handleDelete = async (id: number, name: string) => {
+    if (!window.confirm(`¿Eliminar la categoría "${name}"? Los productos asociados perderán su categoría.`)) return;
+    try {
+      await deleteCategory(id);
+      toast.success('Categoría eliminada');
+      onRefresh();
+    } catch { toast.error('No se pudo eliminar. Puede tener productos asociados.'); }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-6"
+    >
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="absolute inset-0 bg-slate-950/60 backdrop-blur-md"
+      />
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.95, opacity: 0, y: 20 }}
+        transition={{ duration: 0.2 }}
+        className="bg-white dark:bg-slate-900 rounded-[32px] w-full max-w-2xl shadow-2xl relative z-10 flex flex-col overflow-hidden"
+        style={{ maxHeight: '85vh' }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between p-8 pb-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-premium-emerald/10 flex items-center justify-center">
+              <LayoutGrid size={20} className="text-premium-emerald" />
+            </div>
+            <div>
+              <h3 className="text-xl font-black text-slate-900 dark:text-white">Gestión de Categorías</h3>
+              <p className="text-xs text-slate-500 font-medium">{categories.length} categorías registradas</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-400">
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Nueva categoría */}
+        <div className="p-8 pb-0">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Nueva Categoría</p>
+          <div className="flex gap-3">
+            <input
+              type="text"
+              placeholder="Nombre de la categoría..."
+              className="premium-input flex-1 text-slate-900 dark:text-white"
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleCreate()}
+            />
+            <input
+              type="text"
+              placeholder="Descripción (opcional)"
+              className="premium-input flex-1 text-slate-900 dark:text-white"
+              value={newDesc}
+              onChange={e => setNewDesc(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleCreate()}
+            />
+            <button
+              onClick={handleCreate}
+              disabled={loading || !newName.trim()}
+              className="btn-premium-emerald px-5 shrink-0 disabled:opacity-50"
+            >
+              <Plus size={18} />
+            </button>
+          </div>
+        </div>
+
+        {/* Search filter */}
+        <div className="px-8 pt-4">
+          <div className="relative">
+            <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Filtrar categorías..."
+              className="w-full bg-slate-50 dark:bg-slate-800/60 border-none rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-800 dark:text-white outline-none placeholder:text-slate-400"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+        </div>
+
+        {/* Lista */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-8 pt-4 space-y-2">
+          {filtered.length === 0 && (
+            <div className="text-center py-10 text-slate-400">
+              <Tag size={32} className="mx-auto mb-2 opacity-40" />
+              <p className="text-sm font-medium">No hay categorías que mostrar</p>
+            </div>
+          )}
+          {filtered.map(cat => (
+            <div
+              key={cat.id}
+              className="flex items-center gap-3 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 group"
+            >
+              {editingId === cat.id ? (
+                <>
+                  <input
+                    autoFocus
+                    type="text"
+                    value={editName}
+                    onChange={e => setEditName(e.target.value)}
+                    className="premium-input flex-1 text-sm py-2 text-slate-900 dark:text-white"
+                    onKeyDown={e => e.key === 'Enter' && handleUpdate(cat.id)}
+                  />
+                  <input
+                    type="text"
+                    value={editDesc}
+                    onChange={e => setEditDesc(e.target.value)}
+                    placeholder="Descripción..."
+                    className="premium-input flex-1 text-sm py-2 text-slate-900 dark:text-white"
+                    onKeyDown={e => e.key === 'Enter' && handleUpdate(cat.id)}
+                  />
+                  <button
+                    onClick={() => handleUpdate(cat.id)}
+                    disabled={loading}
+                    className="p-2 rounded-xl bg-premium-emerald/10 text-premium-emerald hover:bg-premium-emerald/20 transition-colors"
+                  >
+                    <Check size={16} />
+                  </button>
+                  <button
+                    onClick={() => setEditingId(null)}
+                    className="p-2 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-500 hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+                  >
+                    <X size={16} />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="w-8 h-8 rounded-xl bg-premium-emerald/10 flex items-center justify-center shrink-0">
+                    <Tag size={14} className="text-premium-emerald" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-sm text-slate-800 dark:text-slate-200 truncate">{cat.name}</p>
+                    {cat.description && <p className="text-xs text-slate-400 truncate">{cat.description}</p>}
+                  </div>
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => { setEditingId(cat.id); setEditName(cat.name); setEditDesc(cat.description || ''); }}
+                      className="p-2 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 text-slate-400 hover:text-blue-500 transition-colors"
+                    >
+                      <Pencil size={14} />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(cat.id, cat.name)}
+                      className="p-2 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 transition-colors"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ─── Main InventoryView ─────────────────────────────────────────────────────────
 export default function InventoryView() {
   const [searchTerm, setSearchTerm] = useState('');
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
-  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
-
-  // Form states
+  const [isCategoryPanelOpen, setIsCategoryPanelOpen] = useState(false);
   const [editingProductId, setEditingProductId] = useState<number | null>(null);
-  const [newCategoryName, setNewCategoryName] = useState('');
+
   const [newProduct, setNewProduct] = useState({
-    name: '', internalCode: '', cabysCode: '', purchaseCost: 0, salePrice: 0, stockQuantity: 0, category: { id: '' }
+    name: '', internalCode: '', cabysCode: '',
+    purchaseCost: 0, salePrice: 0, stockQuantity: 0,
+    category: { id: '' }
   });
 
   const loadData = async () => {
     try {
-      const prods = await getProducts();
-      const cats = await getCategories();
+      const [prods, cats] = await Promise.all([getProducts(), getCategories()]);
       setProducts(prods);
       setCategories(cats);
     } catch (error) {
-      console.error("Failed to load data", error);
+      console.error('Failed to load data', error);
     }
   };
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const handleCreateCategory = async () => {
-    if (!newCategoryName) {
-      toast.error('El nombre de la categoría es requerido');
-      return;
-    }
-    try {
-      await createCategory({ name: newCategoryName, description: 'Creada desde UI' });
-      setNewCategoryName('');
-      setIsCategoryModalOpen(false);
-      toast.success('Categoría guardada con éxito');
-      loadData();
-    } catch (error) {
-      console.error(error);
-      toast.error('Hubo un error al guardar la categoría');
-    }
-  };
+  useEffect(() => { loadData(); }, []);
 
   const handleCreateProduct = async () => {
     if (!newProduct.name || !newProduct.cabysCode || !newProduct.category.id) {
-       toast.error("El Nombre, CABYS y Categoría son obligatorios.");
-       return;
+      toast.error('El Nombre, CABYS y Categoría son obligatorios.');
+      return;
     }
     try {
       const payload = {
@@ -61,24 +415,20 @@ export default function InventoryView() {
         isAgrochemicalInsufficiency: false,
         category: { id: parseInt(newProduct.category.id) }
       };
-
       if (editingProductId) {
         await updateProduct(editingProductId, payload);
-        toast.success("Producto actualizado correctamente");
+        toast.success('Producto actualizado correctamente');
       } else {
         await createProduct(payload);
-        toast.success("Producto registrado exitosamente");
+        toast.success('Producto registrado exitosamente');
       }
-      
       setIsProductModalOpen(false);
       setEditingProductId(null);
-      setNewProduct({
-        name: '', internalCode: '', cabysCode: '', purchaseCost: 0, salePrice: 0, stockQuantity: 0, category: { id: '' }
-      });
+      setNewProduct({ name: '', internalCode: '', cabysCode: '', purchaseCost: 0, salePrice: 0, stockQuantity: 0, category: { id: '' } });
       loadData();
     } catch (error) {
       console.error(error);
-      toast.error("Error validando datos o del servidor.");
+      toast.error('Error validando datos o del servidor.');
     }
   };
 
@@ -102,92 +452,151 @@ export default function InventoryView() {
     return 'IN_STOCK';
   };
 
+  const filteredProducts = products.filter(p =>
+    p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (p.internalCode || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (p.cabysCode || '').includes(searchTerm)
+  );
+
   return (
-    <div className="flex flex-col gap-6 w-full max-w-7xl mx-auto h-[calc(100vh-8rem)]">
-      {/* Encabezado Principal */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="flex flex-col gap-8 h-full">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Inventario de Agronomía</h2>
-          <p className="text-gray-500 dark:text-gray-400">Control de productos y categorías conectado en tiempo real.</p>
+          <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Inventario de Agronomía</h2>
+          <p className="text-slate-500 font-medium">Control de productos y categorías en tiempo real.</p>
         </div>
-        <div className="flex gap-2">
-            <button onClick={() => setIsCategoryModalOpen(true)} className="p-2 border border-agro-green text-agro-green rounded-lg shadow-sm text-sm hover:bg-agro-green/10 transition-colors">
-            + Categoría
-            </button>
-            <button onClick={() => { setEditingProductId(null); setNewProduct({name: '', internalCode: '', cabysCode: '', purchaseCost: 0, salePrice: 0, stockQuantity: 0, category: { id: '' }}); setIsProductModalOpen(true); }} className="liquid-btn-primary py-2 px-4 shadow-sm text-sm flex items-center justify-center gap-2">
+        <div className="flex gap-3">
+          <button
+            onClick={() => setIsCategoryPanelOpen(true)}
+            className="premium-panel flex items-center gap-2 px-6 py-3 bg-white dark:bg-slate-900 border-none font-bold text-slate-700 dark:text-slate-200 hover:scale-105 transition-transform"
+          >
+            <LayoutGrid size={18} />
+            <span>Categorías</span>
+            {categories.length > 0 && (
+              <span className="bg-premium-emerald/10 text-premium-emerald text-xs font-black px-2 py-0.5 rounded-lg">
+                {categories.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => {
+              setEditingProductId(null);
+              setNewProduct({ name: '', internalCode: '', cabysCode: '', purchaseCost: 0, salePrice: 0, stockQuantity: 0, category: { id: '' } });
+              setIsProductModalOpen(true);
+            }}
+            className="btn-premium-emerald flex items-center justify-center gap-2"
+          >
             <Plus size={18} /> Nuevo Producto
-            </button>
+          </button>
         </div>
       </div>
 
-      {/* Controles de Filtrado */}
-      <div className="liquid-glass-panel p-4 flex flex-col md:flex-row gap-4 items-center shrink-0">
-        <div className="relative flex-1 w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-          <input 
-            type="text" 
-            placeholder="Buscar por nombre, SKU..." 
-            className="liquid-input pl-10 w-full"
+      {/* Search Bar */}
+      <div className="premium-panel p-2 flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+          <input
+            type="text"
+            placeholder="Buscar por nombre, SKU o código interno..."
+            className="w-full bg-transparent border-none rounded-2xl px-14 py-4 focus:ring-0 outline-none text-slate-800 dark:text-white placeholder:text-slate-400 font-medium"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <button className="p-3 bg-white/50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2 justify-center text-gray-700 dark:text-gray-300">
-          <Filter size={18} />
-          <span>Filtros</span>
+        <button className="p-4 bg-slate-100 dark:bg-slate-800 rounded-2xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors mr-1">
+          <Filter size={20} className="text-slate-600 dark:text-slate-300" />
         </button>
       </div>
 
-      {/* Tabla Principal */}
-      <div className="liquid-glass-panel flex-1 overflow-hidden flex flex-col">
+      {/* Products Table */}
+      <div className="flex-1 premium-panel overflow-hidden flex flex-col">
         <div className="overflow-x-auto custom-scrollbar flex-1">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-black/5 dark:bg-white/5 border-b border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400 text-sm">
-                <th className="p-4 font-semibold rounded-tl-xl w-32">Estado</th>
-                <th className="p-4 font-semibold">Producto</th>
-                <th className="p-4 font-semibold">Categoría</th>
-                <th className="p-4 font-semibold text-right">Existencias</th>
-                <th className="p-4 font-semibold text-right rounded-tr-xl">Precio (CRC)</th>
+              <tr className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-black uppercase tracking-widest">
+                <th className="p-6">Estado</th>
+                <th className="p-6">Producto</th>
+                <th className="p-6">Categoría</th>
+                <th className="p-6 text-right">Existencias</th>
+                <th className="p-6 text-right">Precio Venta</th>
+                <th className="p-6 text-right">Acciones</th>
               </tr>
             </thead>
             <tbody>
-              {products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase())).map((item, index) => {
+              {filteredProducts.map((item, index) => {
                 const status = getStatus(item.stockQuantity);
                 return (
-                <motion.tr 
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  key={item.id} 
-                  onClick={() => openEditModal(item)}
-                  className="border-b border-gray-100 dark:border-gray-800/50 hover:bg-white/40 dark:hover:bg-gray-800/40 transition-colors group cursor-pointer"
-                >
-                  <td className="p-4">
-                    {status === 'IN_STOCK' && <span className="inline-flex items-center gap-1.5 py-1 px-2.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"><Package size={12}/> En Stock</span>}
-                    {status === 'LOW_STOCK' && <span className="inline-flex items-center gap-1.5 py-1 px-2.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border border-amber-200 dark:border-amber-800"><AlertCircle size={12}/> Bajo</span>}
-                    {status === 'OUT_OF_STOCK' && <span className="inline-flex items-center gap-1.5 py-1 px-2.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 border border-red-200 dark:border-red-800"><AlertCircle size={12}/> Agotado</span>}
-                  </td>
-                  <td className="p-4">
-                    <div className="font-medium text-gray-800 dark:text-gray-200">{item.name}</div>
-                    <div className="text-xs text-gray-400 mt-1">{item.internalCode || 'Sin SKU'} | CABYS: {item.cabysCode}</div>
-                  </td>
-                  <td className="p-4 text-gray-600 dark:text-gray-400">
-                    <span className="py-1 px-2.5 rounded-md bg-gray-100 dark:bg-gray-800 text-xs text-gray-600 dark:text-gray-300">
-                      {item.category?.name || 'Sin Categoría'}
-                    </span>
-                  </td>
-                  <td className="p-4 text-right">
-                    <div className="font-medium text-gray-800 dark:text-gray-200">{item.stockQuantity}</div>
-                  </td>
-                  <td className="p-4 font-bold text-gray-900 dark:text-white text-right">
-                    ₡{item.salePrice?.toLocaleString()}
-                  </td>
-                </motion.tr>
-              )})}
-              {products.length === 0 && (
+                  <motion.tr
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.04 }}
+                    key={item.id}
+                    className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors group"
+                  >
+                    <td className="p-6">
+                      {status === 'IN_STOCK' && (
+                        <div className="flex items-center gap-2 text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1.5 rounded-xl border border-emerald-100 dark:border-emerald-800 font-bold text-xs w-fit">
+                          <PackageCheck size={14} /> En Stock
+                        </div>
+                      )}
+                      {status === 'LOW_STOCK' && (
+                        <div className="flex items-center gap-2 text-amber-500 bg-amber-50 dark:bg-amber-900/20 px-3 py-1.5 rounded-xl border border-amber-100 dark:border-amber-800 font-bold text-xs w-fit">
+                          <AlertCircle size={14} /> Bajo Stock
+                        </div>
+                      )}
+                      {status === 'OUT_OF_STOCK' && (
+                        <div className="flex items-center gap-2 text-rose-500 bg-rose-50 dark:bg-rose-900/20 px-3 py-1.5 rounded-xl border border-rose-100 dark:border-rose-800 font-bold text-xs w-fit">
+                          <AlertCircle size={14} /> Agotado
+                        </div>
+                      )}
+                    </td>
+                    <td className="p-6">
+                      <div className="flex flex-col">
+                        <span className="font-bold text-slate-800 dark:text-slate-200">{item.name}</span>
+                        <div className="flex items-center gap-2 mt-1 text-[10px] text-slate-400 font-black uppercase tracking-widest">
+                          <Barcode size={12} className="opacity-50" />
+                          {item.internalCode || 'N/A'} | CABYS: {item.cabysCode}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="p-6">
+                      <span className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-widest">
+                        {item.category?.name || 'Genérico'}
+                      </span>
+                    </td>
+                    <td className="p-6 text-right">
+                      <span className={`text-lg font-black ${status === 'IN_STOCK' ? 'text-slate-900 dark:text-white' : status === 'LOW_STOCK' ? 'text-amber-500' : 'text-rose-500'}`}>
+                        {item.stockQuantity}
+                      </span>
+                    </td>
+                    <td className="p-6 text-right">
+                      <div className="flex flex-col items-end">
+                        <span className="font-black text-slate-900 dark:text-white text-lg">₡{item.salePrice?.toLocaleString()}</span>
+                        <span className="text-[10px] font-bold text-slate-400">Costo: ₡{item.purchaseCost?.toLocaleString()}</span>
+                      </div>
+                    </td>
+                    <td className="p-6 text-right">
+                      <button
+                        onClick={() => openEditModal(item)}
+                        className="w-10 h-10 flex items-center justify-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-400 hover:text-premium-emerald hover:border-premium-emerald transition-all ml-auto"
+                      >
+                        <Edit3 size={18} />
+                      </button>
+                    </td>
+                  </motion.tr>
+                );
+              })}
+              {filteredProducts.length === 0 && (
                 <tr>
-                    <td colSpan={5} className="p-8 text-center text-gray-400">No hay productos. Agrega uno nuevo para empezar.</td>
+                  <td colSpan={6} className="p-20 text-center">
+                    <div className="flex flex-col items-center opacity-40">
+                      <Package size={48} className="mb-4" />
+                      <p className="font-black uppercase tracking-widest">
+                        {searchTerm ? 'Sin resultados para tu búsqueda' : 'Inventario Vacío'}
+                      </p>
+                    </div>
+                  </td>
                 </tr>
               )}
             </tbody>
@@ -195,67 +604,92 @@ export default function InventoryView() {
         </div>
       </div>
 
-      {/* Modals de Formulario rápidos */}
       <AnimatePresence>
-        {isCategoryModalOpen && (
-          <motion.div initial={{opacity: 0}} animate={{opacity: 1}} exit={{opacity: 0}} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
-              <h3 className="text-lg font-bold mb-4 dark:text-white">Nueva Categoría</h3>
-              <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nombre de la Categoría</label>
-                  <input type="text" placeholder="Ej. Fertilizantes" className="liquid-input w-full" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} />
-              </div>
-              <div className="flex justify-end gap-2">
-                <button onClick={() => setIsCategoryModalOpen(false)} className="px-4 py-2 text-gray-600 dark:text-gray-400">Cancelar</button>
-                <button onClick={handleCreateCategory} className="liquid-btn-primary px-4 py-2 text-sm">Guardar</button>
-              </div>
-            </div>
-          </motion.div>
+        {/* Category Manager Panel */}
+        {isCategoryPanelOpen && (
+          <CategoryManagerPanel
+            categories={categories}
+            onRefresh={loadData}
+            onClose={() => setIsCategoryPanelOpen(false)}
+          />
         )}
-        
+
+        {/* Product Modal */}
         {isProductModalOpen && (
-          <motion.div initial={{opacity: 0}} animate={{opacity: 1}} exit={{opacity: 0}} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 w-full max-w-lg shadow-2xl">
-              <h3 className="text-lg font-bold mb-4 dark:text-white">{editingProductId ? 'Editar Producto' : 'Registrar Producto Agrícola'}</h3>
-              <div className="grid grid-cols-2 gap-4 mb-6">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-6 text-slate-900 dark:text-white">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsProductModalOpen(false)}
+              className="absolute inset-0 bg-slate-950/60 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white dark:bg-slate-900 rounded-[40px] p-10 w-full max-w-xl shadow-2xl relative z-10 overflow-hidden"
+            >
+              <div className="absolute top-[-50px] right-[-50px] w-48 h-48 bg-blue-500/10 blur-[60px] rounded-full" />
+              <h3 className="text-2xl font-black mb-1 relative">
+                {editingProductId ? 'Modificar Producto' : 'Nuevo Producto'}
+              </h3>
+              <p className="text-slate-500 text-sm mb-8 relative font-medium">Información técnica del artículo en almacén.</p>
+
+              <div className="grid grid-cols-2 gap-4 mb-8 relative">
                 <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nombre Comercial <span className="text-red-500">*</span></label>
-                  <input type="text" placeholder="Ej. Fertilizante QPK 100 ml" required className="liquid-input w-full" value={newProduct.name} onChange={(e) => setNewProduct({...newProduct, name: e.target.value})} />
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Descripción Comercial</label>
+                  <input type="text" placeholder="Ej. Fertilizante QPK 100 ml" className="premium-input w-full"
+                    value={newProduct.name} onChange={e => setNewProduct({ ...newProduct, name: e.target.value })} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Código Interno/SKU</label>
-                  <input type="text" placeholder="Ej. 2353" className="liquid-input w-full" value={newProduct.internalCode} onChange={(e) => setNewProduct({...newProduct, internalCode: e.target.value})} />
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Código Interno / SKU</label>
+                  <input type="text" placeholder="SKU-2353" className="premium-input w-full"
+                    value={newProduct.internalCode} onChange={e => setNewProduct({ ...newProduct, internalCode: e.target.value })} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Código CABYS (13 díg) <span className="text-red-500">*</span></label>
-                  <input type="text" placeholder="Ej. 1234567890123" required className="liquid-input w-full" value={newProduct.cabysCode} onChange={(e) => setNewProduct({...newProduct, cabysCode: e.target.value})} />
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Código CABYS</label>
+                  <input type="text" placeholder="13 dígitos..." className="premium-input w-full"
+                    value={newProduct.cabysCode} onChange={e => setNewProduct({ ...newProduct, cabysCode: e.target.value })} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Costo de Compra (₡)</label>
-                  <input type="number" placeholder="Ej. 3000" className="liquid-input w-full" value={newProduct.purchaseCost || ''} onChange={(e) => setNewProduct({...newProduct, purchaseCost: parseFloat(e.target.value)})} />
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Costo Compra (₡)</label>
+                  <input type="number" placeholder="₡ 0" className="premium-input w-full"
+                    value={newProduct.purchaseCost || ''} onChange={e => setNewProduct({ ...newProduct, purchaseCost: parseFloat(e.target.value) })} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Precio de Venta (₡)</label>
-                  <input type="number" placeholder="Ej. 5000" className="liquid-input w-full" value={newProduct.salePrice || ''} onChange={(e) => setNewProduct({...newProduct, salePrice: parseFloat(e.target.value)})} />
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Precio Venta (₡)</label>
+                  <input type="number" placeholder="₡ 0" className="premium-input w-full"
+                    value={newProduct.salePrice || ''} onChange={e => setNewProduct({ ...newProduct, salePrice: parseFloat(e.target.value) })} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Stock Inicial</label>
-                  <input type="number" placeholder="Ej. 50" className="liquid-input w-full" value={newProduct.stockQuantity || ''} onChange={(e) => setNewProduct({...newProduct, stockQuantity: parseInt(e.target.value)})} />
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Stock Disponible</label>
+                  <input type="number" placeholder="Cantidad..." className="premium-input w-full"
+                    value={newProduct.stockQuantity || ''} onChange={e => setNewProduct({ ...newProduct, stockQuantity: parseInt(e.target.value) })} />
                 </div>
+
+                {/* ← Searchable category select */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Categoría <span className="text-red-500">*</span></label>
-                  <select className="liquid-input w-full" value={newProduct.category.id} onChange={(e) => setNewProduct({...newProduct, category: { id: e.target.value }})}>
-                      <option value="">-- Seleccionar --</option>
-                      {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Categoría</label>
+                  <CategorySelect
+                    categories={categories}
+                    value={newProduct.category.id}
+                    onChange={id => setNewProduct({ ...newProduct, category: { id } })}
+                  />
                 </div>
               </div>
-              <div className="flex justify-end gap-2">
-                <button onClick={() => setIsProductModalOpen(false)} className="px-4 py-2 text-gray-600 dark:text-gray-400">Cancelar</button>
-                <button onClick={handleCreateProduct} className="liquid-btn-primary px-4 py-2 text-sm">{editingProductId ? 'Actualizar' : 'Registrar'}</button>
+
+              <div className="flex gap-4 relative">
+                <button onClick={() => setIsProductModalOpen(false)}
+                  className="flex-1 py-4 text-slate-500 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 rounded-2xl transition-colors">
+                  Cancelar
+                </button>
+                <button onClick={handleCreateProduct} className="flex-1 btn-premium-emerald py-4">
+                  {editingProductId ? 'Aplicar Cambios' : 'Confirmar'}
+                </button>
               </div>
-            </div>
-          </motion.div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

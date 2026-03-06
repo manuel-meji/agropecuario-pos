@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Search, Filter, Plus, FileText, CheckCircle2, Clock, DollarSign, AlertTriangle, ArrowLeft } from 'lucide-react';
-import { getReceivablesByClient, getClientHistory, makePayment } from '../../services/api';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Search, Filter, FileText, CheckCircle2, Clock, DollarSign, ArrowLeft, History, User } from 'lucide-react';
+import { getReceivablesByClient, getClientHistory, makePayment, getPaymentRecords } from '../../services/api';
 import toast from 'react-hot-toast';
 
 export default function ReceivablesView() {
@@ -14,6 +14,10 @@ export default function ReceivablesView() {
   const [paymentId, setPaymentId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  
+  const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
+  const [showPaymentHistoryModal, setShowPaymentHistoryModal] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   useEffect(() => {
     loadClients();
@@ -46,6 +50,21 @@ export default function ReceivablesView() {
     }
   };
 
+  const viewPaymentHistory = async () => {
+    if (!selectedClient) return;
+    setLoadingHistory(true);
+    setShowPaymentHistoryModal(true);
+    try {
+        const allPayments = await getPaymentRecords();
+        const clientPayments = allPayments.filter((p: any) => p.clientName === selectedClient.clientName);
+        setPaymentHistory(clientPayments);
+    } catch (error) {
+        toast.error("Error al cargar historial de abonos");
+    } finally {
+        setLoadingHistory(false);
+    }
+  };
+
   const handlePaymentClick = (receivableId: number) => {
     setPaymentId(receivableId);
     setPaymentAmount('');
@@ -66,7 +85,6 @@ export default function ReceivablesView() {
       setPaymentAmount('');
       setPaymentId(null);
       
-      // Recargar datos
       const updatedClients = await loadClients();
       if (selectedClient) {
         if (updatedClients && updatedClients.length > 0) {
@@ -90,321 +108,271 @@ export default function ReceivablesView() {
   );
 
   return (
-    <div className="flex flex-col gap-6 w-full max-w-7xl mx-auto h-[calc(100vh-8rem)]">
+    <div className="flex flex-col gap-8 h-full">
       {!showHistory ? (
         <>
-          {/* Encabezado Principal */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div>
-              <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Cuentas por Cobrar (CxC)</h2>
-              <p className="text-gray-500 dark:text-gray-400">Clientes con deudas pendientes. Haz clic en uno para ver el historial de sus compras a crédito.</p>
+              <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Cartera de Cobros</h2>
+              <p className="text-slate-500 font-medium">Gestión de créditos y saldos pendientes de clientes.</p>
             </div>
-            <button className="liquid-btn-primary py-2 px-4 shadow-sm text-sm flex items-center justify-center gap-2 w-full md:w-auto">
-              <Plus size={18} />
-              Nuevo Crédito Manual
-            </button>
+            <div className="flex gap-3">
+               <button className="premium-panel flex items-center gap-2 px-6 py-3 bg-white dark:bg-slate-900 border-none font-bold text-slate-700 dark:text-slate-200 hover:scale-105 transition-transform">
+                 <Filter size={18} />
+                 <span>Filtros</span>
+               </button>
+               <button className="btn-premium-emerald flex items-center justify-center gap-2">
+                 <DollarSign size={18} />
+                 Abono Masivo
+               </button>
+            </div>
           </div>
 
-          {/* Controles de Filtrado */}
-          <div className="liquid-glass-panel p-4 flex flex-col md:flex-row gap-4 items-center shrink-0">
-            <div className="relative flex-1 w-full">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+          <div className="premium-panel p-2 flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
               <input 
                 type="text" 
-                placeholder="Buscar por nombre de cliente o teléfono..." 
-                className="liquid-input pl-10 w-full"
+                placeholder="Buscar por cliente o teléfono..." 
+                className="w-full bg-transparent border-none rounded-2xl px-14 py-4 focus:ring-0 outline-none text-slate-800 dark:text-white placeholder:text-slate-400 font-medium"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <button className="p-3 bg-white/50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2 w-full md:w-auto justify-center text-gray-700 dark:text-gray-300">
-              <Filter size={18} />
-              <span>Filtros</span>
-            </button>
           </div>
 
-          {/* Lista de Clientes con Deuda */}
-          <div className="liquid-glass-panel flex-1 overflow-hidden flex flex-col">
+          <div className="flex-1 overflow-y-auto custom-scrollbar pb-10">
             {loading ? (
-              <div className="flex items-center justify-center h-full">
-                <p className="text-gray-500">Cargando cuentas por cobrar...</p>
+              <div className="flex items-center justify-center py-20 opacity-40 animate-pulse">
+                <p className="font-bold">Sincronizando cuentas...</p>
               </div>
             ) : filteredClients.length === 0 ? (
-              <div className="flex items-center justify-center h-full">
-                <p className="text-gray-500">No hay cuentas por cobrar registradas</p>
+              <div className="flex items-center justify-center py-20 opacity-40">
+                <p className="font-bold">No se encontraron deudas activas</p>
               </div>
             ) : (
-              <div className="overflow-y-auto custom-scrollbar">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
-                  {filteredClients.map((client, index) => (
-                    <motion.div
-                      key={index}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                      onClick={() => viewClientHistory(client)}
-                      className="bg-white/50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 p-5 hover:border-agro-green/50 hover:shadow-lg transition-all cursor-pointer group"
-                    >
-                      <div className="space-y-4">
-                        {/* Estado */}
-                        <div>
-                          {client.generalStatus === 'PAID_IN_FULL' && (
-                            <span className="inline-flex items-center gap-1.5 py-1 px-3 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                              <CheckCircle2 size={12} /> Pagado
-                            </span>
-                          )}
-                          {client.generalStatus === 'PARTIAL' && (
-                            <span className="inline-flex items-center gap-1.5 py-1 px-3 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                              <DollarSign size={12} /> Pago Parcial
-                            </span>
-                          )}
-                          {client.generalStatus === 'PENDING' && (
-                            <span className="inline-flex items-center gap-1.5 py-1 px-3 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                              <Clock size={12} /> Pendiente de Pago
-                            </span>
-                          )}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredClients.map((client, index) => (
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    onClick={() => viewClientHistory(client)}
+                    className="premium-panel p-6 cursor-pointer group hover:border-premium-emerald"
+                  >
+                    <div className="flex flex-col gap-6">
+                      <div className="flex justify-between items-start">
+                        <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 group-hover:bg-premium-emerald/10 group-hover:text-premium-emerald transition-colors">
+                          <User size={24} />
                         </div>
-
-                        {/* Nombre del Cliente */}
-                        <div>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Cliente</p>
-                          <p className="text-lg font-bold text-gray-800 dark:text-white group-hover:text-agro-green transition-colors">
-                            {client.clientName}
-                          </p>
-                          {client.clientPhone && (
-                            <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
-                              📱 {client.clientPhone}
-                            </p>
-                          )}
-                        </div>
-
-                        {/* Totales */}
-                        <div className="border-t border-gray-200 dark:border-gray-700 pt-4 space-y-2">
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-600 dark:text-gray-400">Deuda Total</span>
-                            <span className="font-bold text-gray-900 dark:text-white">
-                              ₡{client.totalDebtAmount?.toLocaleString('es-CR', { maximumFractionDigits: 2 })}
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-600 dark:text-gray-400">Pagado</span>
-                            <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                              ₡{client.totalPaidAmount?.toLocaleString('es-CR', { maximumFractionDigits: 2 })}
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center bg-gray-100/50 dark:bg-gray-900/50 p-2 rounded">
-                            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Saldo Pendiente</span>
-                            <span className={`font-bold text-lg ${
-                              client.totalRemainingBalance?.toString() === '0' 
-                                ? 'text-emerald-600 dark:text-emerald-400' 
-                                : 'text-red-600 dark:text-red-400'
-                            }`}>
-                              ₡{client.totalRemainingBalance?.toLocaleString('es-CR', { maximumFractionDigits: 2 })}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Botón Ver Historial */}
-                        <button className="w-full text-center py-2 bg-gradient-to-r from-agro-green to-emerald-500 text-white font-medium rounded-lg hover:shadow-lg transition-all active:scale-95">
-                          Ver {client.receivables?.length || 0} Compra{client.receivables?.length !== 1 ? 's' : ''} a Crédito →
-                        </button>
+                        {client.totalRemainingBalance > 0 ? (
+                          <span className="px-3 py-1 rounded-full bg-amber-50 dark:bg-amber-900/30 text-amber-600 text-[10px] font-black uppercase tracking-wider border border-amber-100 dark:border-amber-800">Pendiente</span>
+                        ) : (
+                          <span className="px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 text-[10px] font-black uppercase tracking-wider border border-emerald-100 dark:border-emerald-800">Al día</span>
+                        )}
                       </div>
-                    </motion.div>
-                  ))}
-                </div>
+
+                      <div>
+                        <h4 className="text-xl font-black text-slate-900 dark:text-white leading-tight mb-1 group-hover:text-premium-emerald transition-colors">{client.clientName}</h4>
+                        <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">{client.clientPhone || 'Sin teléfono'}</p>
+                      </div>
+
+                      <div className="pt-6 border-t border-slate-100 dark:border-slate-800 flex justify-between items-end">
+                         <div className="flex flex-col">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase mb-1">Saldo Total</span>
+                            <span className="text-2xl font-black text-slate-900 dark:text-white">₡{client.totalRemainingBalance?.toLocaleString()}</span>
+                         </div>
+                         <div className="text-right">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Compras</span>
+                            <span className="font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-lg">{client.details?.length || 0}</span>
+                         </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
               </div>
             )}
           </div>
         </>
       ) : (
-        <>
-          {/* Vista de Historial del Cliente */}
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => {
-                setShowHistory(false);
-                setSelectedClient(null);
-              }}
-              className="p-2 hover:bg-white/50 dark:hover:bg-gray-800/50 rounded-lg transition-colors"
-            >
-              <ArrowLeft size={24} className="text-gray-600 dark:text-gray-400" />
-            </button>
-            <div>
-              <h2 className="text-2xl font-bold text-gray-800 dark:text-white">
-                {selectedClient?.clientName}
-              </h2>
-              <p className="text-gray-500 dark:text-gray-400">Historial de compras a crédito</p>
-            </div>
-          </div>
-
-          {/* Resumen del Cliente */}
-          <div className="grid grid-cols-3 gap-4">
-            <div className="liquid-glass-panel p-4 rounded-lg">
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Deuda Total</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                ₡{selectedClient?.totalDebtAmount?.toLocaleString('es-CR', { maximumFractionDigits: 2 })}
-              </p>
-            </div>
-            <div className="liquid-glass-panel p-4 rounded-lg">
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Total Pagado</p>
-              <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-                ₡{selectedClient?.totalPaidAmount?.toLocaleString('es-CR', { maximumFractionDigits: 2 })}
-              </p>
-            </div>
-            <div className="liquid-glass-panel p-4 rounded-lg">
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Saldo Pendiente</p>
-              <p className={`text-2xl font-bold ${
-                selectedClient?.totalRemainingBalance?.toString() === '0'
-                  ? 'text-emerald-600 dark:text-emerald-400'
-                  : 'text-red-600 dark:text-red-400'
-              }`}>
-                ₡{selectedClient?.totalRemainingBalance?.toLocaleString('es-CR', { maximumFractionDigits: 2 })}
-              </p>
-            </div>
-          </div>
-
-          {/* Historial de Compras */}
-          <div className="liquid-glass-panel flex-1 overflow-hidden flex flex-col p-4">
-            <h3 className="text-lg font-bold mb-4 text-gray-800 dark:text-white">
-              {clientHistory.length} Compra{clientHistory.length !== 1 ? 's' : ''} a Crédito
-            </h3>
-            <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar">
-              {clientHistory.length === 0 ? (
-                <p className="text-gray-500 text-center py-8">No hay compras a crédito registradas</p>
-              ) : (
-                clientHistory.map((receivable, index) => (
-                  <motion.div
-                    key={receivable.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                    className="bg-white/30 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:border-agro-green/50 transition-colors"
-                  >
-                    <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-start">
-                      {/* Factura */}
-                      <div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Factura</p>
-                        <p className="font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                          <FileText size={16} className="text-gray-400" />
-                          {receivable.invoiceNumber}
-                        </p>
-                      </div>
-
-                      {/* Fecha */}
-                      <div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Fecha</p>
-                        <p className="font-medium text-gray-700 dark:text-gray-300">
-                          {receivable.saleDate ? new Date(receivable.saleDate).toLocaleDateString('es-CR') : 'N/A'}
-                        </p>
-                      </div>
-
-                      {/* Total */}
-                      <div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Total</p>
-                        <p className="font-bold text-gray-800 dark:text-white">
-                          ₡{receivable.totalDebt?.toLocaleString('es-CR', { maximumFractionDigits: 2 })}
-                        </p>
-                      </div>
-
-                      {/* Pagado */}
-                      <div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Pagado</p>
-                        <p className="font-bold text-emerald-600 dark:text-emerald-400">
-                          ₡{receivable.amountPaid?.toLocaleString('es-CR', { maximumFractionDigits: 2 })}
-                        </p>
-                      </div>
-
-                      {/* Pendiente */}
-                      <div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Pendiente</p>
-                        <p className={`font-bold text-lg ${
-                          receivable.remainingBalance?.toString() === '0'
-                            ? 'text-emerald-600 dark:text-emerald-400'
-                            : 'text-red-600 dark:text-red-400'
-                        }`}>
-                          ₡{receivable.remainingBalance?.toLocaleString('es-CR', { maximumFractionDigits: 2 })}
-                        </p>
-                      </div>
-
-                      {/* Estado + Botón */}
-                      <div className="flex flex-col gap-2">
-                        <div>
-                          {receivable.status === 'PAID_IN_FULL' && (
-                            <span className="inline-flex items-center gap-1 py-1 px-2 rounded text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300">
-                              <CheckCircle2 size={12} /> Pagado
-                            </span>
-                          )}
-                          {receivable.status === 'PARTIAL' && (
-                            <span className="inline-flex items-center gap-1 py-1 px-2 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-                              <DollarSign size={12} /> Parcial
-                            </span>
-                          )}
-                          {receivable.status === 'PENDING' && (
-                            <span className="inline-flex items-center gap-1 py-1 px-2 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-                              <Clock size={12} /> Pendiente
-                            </span>
-                          )}
-                        </div>
-                        {receivable.remainingBalance > 0 && (
-                          <button
-                            onClick={() => handlePaymentClick(receivable.id)}
-                            className="text-xs bg-agro-green/20 text-agro-green hover:bg-agro-green/30 px-2 py-1 rounded transition-colors font-medium"
-                          >
-                            Abonar
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </motion.div>
-                ))
-              )}
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Modal de Pago */}
-      {showPaymentModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-white dark:bg-gray-900 rounded-xl p-6 w-full max-w-sm"
-          >
-            <h3 className="text-xl font-bold mb-4 text-gray-800 dark:text-white">Registrar Pago</h3>
-            <div className="space-y-4">
+        <div className="flex flex-col gap-8 pb-10">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-6">
+              <button
+                onClick={() => {
+                  setShowHistory(false);
+                  setSelectedClient(null);
+                }}
+                className="w-12 h-12 flex items-center justify-center bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 hover:scale-110 transition-transform"
+              >
+                <ArrowLeft size={24} className="text-slate-600" />
+              </button>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Monto a abonar (CRC)
-                </label>
-                <input
-                  type="number"
-                  placeholder="0.00"
-                  value={paymentAmount}
-                  onChange={(e) => setPaymentAmount(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-800 dark:text-white focus:outline-none focus:border-agro-green"
-                />
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowPaymentModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handlePayment}
-                  className="flex-1 px-4 py-2 bg-agro-green text-white rounded-lg hover:bg-emerald-600 transition-colors font-medium"
-                >
-                  Registrar Pago
-                </button>
+                <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">{selectedClient?.clientName}</h2>
+                <p className="text-slate-500 font-medium">Expediente de crédito y pagos realizados.</p>
               </div>
             </div>
-          </motion.div>
+            
+            <button
+               onClick={viewPaymentHistory} 
+               className="premium-panel bg-white dark:bg-slate-900 flex items-center gap-2 px-6 py-3 border-none font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+            >
+               <History size={18} />
+               Ver Abonos Realizados
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[
+              { label: 'Deuda Consolidada', value: selectedClient?.totalDebtAmount, color: 'text-slate-900 dark:text-white', icon: FileText },
+              { label: 'Monto Recaudado', value: selectedClient?.totalPaidAmount, color: 'text-emerald-500', icon: CheckCircle2 },
+              { label: 'Saldo Neto', value: selectedClient?.totalRemainingBalance, color: 'text-rose-500', icon: Clock }
+            ].map((stat, i) => (
+              <div key={i} className="premium-panel p-8 flex justify-between items-center relative overflow-hidden group">
+                 <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-125 transition-transform duration-700">
+                    <stat.icon size={100} />
+                 </div>
+                 <div className="relative">
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">{stat.label}</p>
+                    <p className={`text-3xl font-black ${stat.color}`}>₡{stat.value?.toLocaleString()}</p>
+                 </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="premium-panel p-8">
+            <h3 className="text-xl font-bold mb-8 text-slate-900 dark:text-white">Historial de Compras</h3>
+            <div className="space-y-4">
+              {clientHistory.map((receivable, index) => (
+                <motion.div
+                  key={receivable.id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                  className="bg-slate-50 dark:bg-slate-800/40 border border-black/5 dark:border-white/5 rounded-2xl p-6 flex flex-col md:flex-row justify-between items-center gap-6"
+                >
+                  <div className="flex items-center gap-4 flex-1">
+                     <div className="w-12 h-12 bg-white dark:bg-slate-900 rounded-xl flex items-center justify-center text-slate-400 shadow-sm">
+                        <FileText size={20} />
+                     </div>
+                     <div>
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{receivable.invoiceNumber}</p>
+                        <p className="font-bold text-slate-900 dark:text-white">Realizada el {receivable.saleDate ? new Date(receivable.saleDate).toLocaleDateString('es-CR') : 'N/A'}</p>
+                     </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-8 flex-1">
+                     <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Monto Total</span>
+                        <span className="font-black text-slate-900 dark:text-white">₡{receivable.totalDebt?.toLocaleString()}</span>
+                     </div>
+                     <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Saldo</span>
+                        <span className={`font-black ${receivable.remainingBalance > 0 ? 'text-rose-500' : 'text-emerald-500'}`}>₡{receivable.remainingBalance?.toLocaleString()}</span>
+                     </div>
+                     <div className="hidden md:block">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Vencimiento</span>
+                        <span className="font-bold text-slate-600 dark:text-slate-400">30 Mar 2026</span>
+                     </div>
+                  </div>
+
+                  <div className="flex items-center gap-4">
+                     {receivable.status === 'PAID_IN_FULL' ? (
+                       <span className="bg-emerald-500/10 text-emerald-500 px-4 py-2 rounded-xl text-xs font-bold border border-emerald-500/20">Liquidada</span>
+                     ) : (
+                       <button
+                         onClick={() => handlePaymentClick(receivable.id)}
+                         className="btn-premium-emerald py-2.5 px-6 shadow-sm text-sm"
+                       >
+                         Abonar
+                       </button>
+                     )}
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
+
+      {/* Modern MODAL: Payment */}
+      <AnimatePresence>
+        {showPaymentModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowPaymentModal(false)} className="absolute inset-0 bg-slate-950/60 backdrop-blur-md" />
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white dark:bg-slate-900 rounded-[40px] p-10 w-full max-w-md shadow-2xl relative z-10 overflow-hidden">
+               <div className="absolute top-[-50px] left-[-50px] w-48 h-48 bg-emerald-500/10 blur-[60px] rounded-full"></div>
+               <h3 className="text-2xl font-black mb-2 text-slate-900 dark:text-white relative">Registrar Abono</h3>
+               <p className="text-slate-500 text-sm mb-8 relative font-medium">Ingrese el monto en CRC que entrega el cliente.</p>
+               
+               <div className="space-y-6 relative">
+                 <div className="relative">
+                    <span className="absolute left-6 top-1/2 -translate-y-1/2 text-xl font-black text-slate-400">₡</span>
+                    <input
+                      type="number"
+                      placeholder="0.00"
+                      value={paymentAmount}
+                      onChange={(e) => setPaymentAmount(e.target.value)}
+                      className="w-full bg-slate-50 dark:bg-slate-950 border-2 border-transparent focus:border-premium-emerald rounded-2xl pl-12 pr-6 py-5 text-2xl font-black text-slate-900 dark:text-white transition-all outline-none"
+                      autoFocus
+                    />
+                 </div>
+                 <div className="flex gap-4">
+                   <button onClick={() => setShowPaymentModal(false)} className="flex-1 py-4 text-slate-500 font-bold hover:bg-slate-50 dark:hover:bg-slate-800 rounded-2xl transition-colors">Cancelar</button>
+                   <button onClick={handlePayment} className="flex-1 btn-premium-emerald py-4">Confirmar</button>
+                 </div>
+               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modern MODAL: Payment History */}
+      <AnimatePresence>
+        {showPaymentHistoryModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowPaymentHistoryModal(false)} className="absolute inset-0 bg-slate-950/60 backdrop-blur-md" />
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white dark:bg-slate-900 rounded-[40px] flex flex-col w-full max-w-2xl max-h-[85vh] shadow-2xl relative z-10 overflow-hidden">
+                <div className="p-10 pb-6 border-b border-slate-100 dark:border-slate-800">
+                    <h3 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-3">
+                       <History size={24} className="text-premium-emerald" /> 
+                       Historial de Abonos
+                    </h3>
+                    <p className="text-slate-500 font-medium">{selectedClient?.clientName}</p>
+                </div>
+                <div className="p-10 pt-6 overflow-y-auto custom-scrollbar flex-1 space-y-4">
+                    {loadingHistory ? (
+                        <div className="text-center text-slate-400 py-10 animate-pulse font-bold">Cargando registros...</div>
+                    ) : paymentHistory.length === 0 ? (
+                        <div className="text-center text-slate-400 py-20 font-bold">No se registran movimientos para este cliente.</div>
+                    ) : (
+                        paymentHistory.map((payment, idx) => (
+                          <div key={idx} className="bg-slate-50 dark:bg-slate-800/40 p-6 rounded-3xl border border-black/5 dark:border-white/5 flex justify-between items-center group hover:bg-white dark:hover:bg-slate-800 transition-all">
+                              <div className="flex items-center gap-4">
+                                  <div className="w-10 h-10 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl flex items-center justify-center text-emerald-500 transition-transform group-hover:scale-110">
+                                      <DollarSign size={20} />
+                                  </div>
+                                  <div>
+                                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{payment.invoiceNumber}</p>
+                                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">{new Date(payment.paymentDate).toLocaleString('es-CR')}</p>
+                                  </div>
+                              </div>
+                              <div className="text-right">
+                                  <p className="text-emerald-500 font-black text-xl">+ ₡{payment.amount?.toLocaleString()}</p>
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase">Saldo final: ₡{payment.newBalance?.toLocaleString()}</p>
+                              </div>
+                          </div>
+                      ))
+                    )}
+                </div>
+                <div className="p-8 bg-slate-50 dark:bg-slate-950 flex justify-center">
+                    <button onClick={() => setShowPaymentHistoryModal(false)} className="btn-premium py-3 px-10 text-sm">Cerrar Historial</button>
+                </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
-
-

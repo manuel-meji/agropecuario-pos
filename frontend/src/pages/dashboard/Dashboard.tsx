@@ -2,7 +2,8 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   LineChart, Line 
 } from 'recharts';
-import { TrendingUp, Banknote, Receipt, AlertTriangle } from 'lucide-react';
+import { TrendingUp, Banknote, Receipt, AlertTriangle, Download } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 const WEEKLY_DATA = [
   { name: 'Lun', sales: 450000, profit: 120000 },
@@ -15,89 +16,119 @@ const WEEKLY_DATA = [
 ];
 
 const METRICS = [
-  { title: "Ingresos Brutos (Hoy)", value: "₡850,000", icon: Banknote, color: "text-emerald-500", bg: "bg-emerald-500/10" },
-  { title: "Utilidad Neta Estimada", value: "₡260,000", icon: TrendingUp, color: "text-blue-500", bg: "bg-blue-500/10" },
-  { title: "Doc. Hacienda Emitidos", value: "142", icon: Receipt, color: "text-purple-500", bg: "bg-purple-500/10" },
-  { title: "Fallas Contingencia", value: "0", icon: AlertTriangle, color: "text-red-500", bg: "bg-red-500/10" },
+  { title: "Ingresos Brutos (Hoy)", value: "₡850,000", icon: Banknote, color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-900/20" },
+  { title: "Utilidad Neta Estimada", value: "₡260,000", icon: TrendingUp, color: "text-blue-500", bg: "bg-blue-50 dark:bg-blue-900/20" },
+  { title: "Doc. Hacienda Emitidos", value: "142", icon: Receipt, color: "text-purple-500", bg: "bg-purple-50 dark:bg-purple-900/20" },
+  { title: "Fallas Contingencia", value: "0", icon: AlertTriangle, color: "text-rose-500", bg: "bg-rose-50 dark:bg-rose-900/20" },
 ];
 
 export default function Dashboard() {
   return (
-    <div className="flex flex-col gap-6 w-full max-w-7xl mx-auto">
+    <div className="flex flex-col gap-8 w-full max-w-7xl mx-auto pb-10">
       
       {/* Header Info */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
          <div>
-            <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Panorama General</h2>
-            <p className="text-gray-500 dark:text-gray-400">Resumen operativo y rendimientos del día en curso.</p>
+            <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Análisis Operativo</h2>
+            <p className="text-slate-500 font-medium">Panel de control con métricas críticas en tiempo real.</p>
          </div>
-         <button className="liquid-btn-primary py-2 px-4 shadow-sm text-sm">
-            Generar Arqueo EOD
-         </button>
+         <div className="flex gap-3">
+            <button className="premium-panel flex items-center gap-2 px-6 py-3 bg-white dark:bg-slate-900 border-none font-bold text-slate-700 dark:text-slate-200">
+              <Download size={18} />
+              <span>Reporte PDF</span>
+            </button>
+            <button className="btn-premium-emerald flex items-center justify-center gap-2">
+               Cierre de Caja
+            </button>
+         </div>
       </div>
 
       {/* Top Metrics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {METRICS.map((metric, idx) => {
           const Icon = metric.icon;
           return (
-            <div key={idx} className="liquid-glass-panel p-5 flex items-center gap-4 hover:-translate-y-1 transition-transform cursor-default">
-              <div className={`p-3 rounded-xl ${metric.bg}`}>
-                <Icon className={`w-6 h-6 ${metric.color}`} />
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: idx * 0.1 }}
+              key={idx} 
+              className="premium-panel p-6 flex items-center gap-5 group"
+            >
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 duration-500 ${metric.bg}`}>
+                <Icon className={`w-7 h-7 ${metric.color}`} />
               </div>
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">{metric.title}</p>
-                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{metric.value}</h3>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">{metric.title}</p>
+                <h3 className="text-2xl font-black text-slate-950 dark:text-white leading-none">{metric.value}</h3>
               </div>
-            </div>
+            </motion.div>
           );
         })}
       </div>
 
       {/* Main Charts Area */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 text-slate-900 dark:text-white">
         
         {/* Gráfico Principal: Volumen Ventas */}
-        <div className="lg:col-span-2 liquid-glass-panel p-6">
-          <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-6">Volumen de Transacciones (Últimos 7 Días)</h3>
-          <div className="h-72 w-full">
+        <div className="lg:col-span-2 premium-panel p-8">
+          <div className="flex items-center justify-between mb-10">
+            <h3 className="text-xl font-black tracking-tight">Volumen de Transacciones</h3>
+            <select className="bg-slate-50 dark:bg-slate-800 border-none text-xs font-bold px-4 py-2 rounded-xl outline-none">
+                <option>Últimos 7 días</option>
+                <option>Último mes</option>
+            </select>
+          </div>
+          <div className="h-80 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={WEEKLY_DATA}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(156, 163, 175, 0.2)" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#6b7280' }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#6b7280' }} tickFormatter={(val) => `₡${val/1000}k`} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(156, 163, 175, 0.1)" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12, fontWeight: 600 }} dy={10} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12, fontWeight: 600 }} tickFormatter={(val) => `₡${val/1000}k`} dx={-10} />
                 <Tooltip 
-                  cursor={{ fill: 'rgba(16, 185, 129, 0.05)' }}
-                  contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.8)', backdropFilter: 'blur(8px)', borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
-                  formatter={(value: number) => [`₡${value.toLocaleString()}`, 'Ingresos']}
+                  cursor={{ fill: 'rgba(16, 185, 129, 0.03)', radius: 12 }}
+                  contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', backdropFilter: 'blur(8px)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.1)', padding: '16px' }}
+                  itemStyle={{ color: '#fff', fontWeight: 800 }}
+                  labelStyle={{ color: '#94a3b8', marginBottom: '4px', fontWeight: 600 }}
+                  formatter={(value: number) => [`₡${value.toLocaleString()}`, 'Ventas']}
                 />
-                <Bar dataKey="sales" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                <Bar dataKey="sales" fill="url(#colorSales)" radius={[10, 10, 10, 10]} maxBarSize={32} />
+                <defs>
+                  <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#10b981" stopOpacity={1}/>
+                    <stop offset="100%" stopColor="#059669" stopOpacity={1}/>
+                  </linearGradient>
+                </defs>
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
         {/* Gráfico Secundario: Tendencia de Utilidad */}
-        <div className="liquid-glass-panel p-6 flex flex-col">
-          <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-6">Tendencia Utilidad Neta</h3>
+        <div className="premium-panel p-8 flex flex-col">
+          <h3 className="text-xl font-black tracking-tight mb-10">Curva de Utilidad</h3>
           <div className="flex-1 w-full min-h-[200px]">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={WEEKLY_DATA}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(156, 163, 175, 0.2)" />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(156, 163, 175, 0.1)" />
                 <XAxis dataKey="name" hide />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 12 }} tickFormatter={(val) => `₡${val/1000}k`} width={60} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 600 }} tickFormatter={(val) => `₡${val/1000}k`} width={45} />
                 <Tooltip 
-                  contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.8)', backdropFilter: 'blur(8px)', borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
-                  formatter={(value: number) => [`₡${value.toLocaleString()}`, 'Utilidad Neta']}
+                   contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', backdropFilter: 'blur(8px)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.1)' }}
+                   itemStyle={{ color: '#60a5fa', fontWeight: 800 }}
+                   formatter={(value: number) => [`₡${value.toLocaleString()}`, 'Utilidad']}
                 />
-                <Line type="monotone" dataKey="profit" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                <Line type="monotone" dataKey="profit" stroke="#3b82f6" strokeWidth={4} dot={false} activeDot={{ r: 8, strokeWidth: 0, fill: '#3b82f6' }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
-          <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
-             <div className="flex justify-between items-center text-sm">
-                <span className="text-gray-500">Crecimiento Intersemanal</span>
-                 <span className="text-emerald-500 font-bold bg-emerald-500/10 px-2 py-1 rounded">+14.2%</span>
+          <div className="mt-8 pt-8 border-t border-slate-100 dark:border-slate-800">
+             <div className="flex justify-between items-center mb-1">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Crecimiento Semanal</span>
+                <span className="text-emerald-500 font-extrabold">+14.2%</span>
+             </div>
+             <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                <motion.div initial={{ width: 0 }} animate={{ width: '70%' }} className="h-full emerald-gradient"></motion.div>
              </div>
           </div>
         </div>

@@ -12,26 +12,34 @@ import TaxesView from "./pages/taxes/TaxesView";
 import ClientsView from "./pages/clients/ClientsView";
 import SalesView from "./pages/sales/SalesView";
 import SuppliersView from "./pages/suppliers/SuppliersView";
+import LoginView from "./pages/auth/LoginView";
+import ProtectedRoute from "./components/auth/ProtectedRoute";
 
 function App() {
   return (
     <BrowserRouter>
       <Toaster position="top-right" toastOptions={{ className: 'dark:bg-gray-800 dark:text-white' }} />
       <Routes>
-        <Route path="/" element={<RootLayout />}>
-          <Route index element={<Navigate to="/pos" replace />} />
-          <Route path="pos" element={<POSTerminal />} />
-          <Route path="sales" element={<SalesView />} />
-          <Route path="clients" element={<ClientsView />} />
-          <Route path="suppliers" element={<SuppliersView />} />
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="debug" element={<div className="p-8 text-2xl font-bold text-red-600">React montado — debug</div>} />
-          <Route path="inventory" element={<InventoryView />} />
-          <Route path="receivables" element={<ReceivablesView />} />
-          <Route path="payables" element={<PayablesView />} />
-          <Route path="taxes" element={<TaxesView />} />
-          <Route path="settings" element={<SettingsView />} />
+        <Route path="/login" element={<LoginView />} />
+        
+        <Route path="/" element={<ProtectedRoute />}>
+          <Route element={<RootLayout />}>
+            <Route index element={<Navigate to="/pos" replace />} />
+            <Route path="pos" element={<POSTerminal />} />
+            <Route path="sales" element={<SalesView />} />
+            <Route path="clients" element={<ClientsView />} />
+            <Route path="suppliers" element={<SuppliersView />} />
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="debug" element={<div className="p-8 text-2xl font-bold text-red-600">React montado — debug</div>} />
+            <Route path="inventory" element={<InventoryView />} />
+            <Route path="receivables" element={<ReceivablesView />} />
+            <Route path="payables" element={<PayablesView />} />
+            <Route path="taxes" element={<TaxesView />} />
+            <Route path="settings" element={<SettingsView />} />
+          </Route>
         </Route>
+
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );
