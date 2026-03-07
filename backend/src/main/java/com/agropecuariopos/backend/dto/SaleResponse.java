@@ -6,12 +6,12 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Getter
 @Setter
 @AllArgsConstructor
 public class SaleResponse {
-
     private Long id;
     private String invoiceNumber;
     private String paymentMethod;
@@ -21,4 +21,6 @@ public class SaleResponse {
     private BigDecimal finalTotal;
     private String clientName;
     private LocalDateTime createdDate;
+    private String type; // SALE, PAYMENT
+    private List<String> categories;
 }

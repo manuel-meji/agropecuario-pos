@@ -29,7 +29,8 @@ export const updateCategory = (id: number, category: any) => api.put(`/categorie
 export const deleteCategory = (id: number) => api.delete(`/categories/${id}`).then(res => res.data);
 export const updateProduct = (id: number, product: any) => api.put(`/products/${id}`, product).then(res => res.data);
 export const createSale = (saleData: any) => api.post('/sales', saleData).then(res => res.data);
-export const getSales = () => api.get('/sales').then(res => res.data);
+export const getSales = (startDate?: string, endDate?: string) =>
+  api.get('/sales', { params: { startDate, endDate } }).then(res => res.data);
 export const getSaleById = (id: number) => api.get(`/sales/${id}`).then(res => res.data);
 export const deleteSale = (id: number, deleteData: { password: string }) => api.delete(`/sales/${id}`, { data: deleteData }).then(res => res.data);
 export const getClients = () => api.get('/clients').then(res => res.data);

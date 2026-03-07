@@ -2,25 +2,38 @@
 
 @theme {
   --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  
+
   --color-premium-emerald: #059669;
   --color-premium-emerald-light: #10b981;
   --color-premium-emerald-dark: #064e3b;
-  
+
   --color-ios-gray: #f2f2f7;
   --color-ios-dark-gray: #1c1c1e;
-  
+
   --color-liquid-bg: rgba(255, 255, 255, 0.4);
   --color-liquid-border: rgba(255, 255, 255, 0.3);
   --color-liquid-dark-bg: rgba(28, 28, 30, 0.6);
   --color-liquid-dark-border: rgba(255, 255, 255, 0.1);
 
+  --shadow-ios-glass: 0 4px 30px rgba(0, 0, 0, 0.03);
+  --shadow-ios-glass-dark: 0 4px 30px rgba(0, 0, 0, 0.2);
+
   --animate-premium-float: premium-float 10s ease-in-out infinite;
 
   @keyframes premium-float {
-    0%, 100% { transform: translate(0, 0); }
-    33% { transform: translate(10px, -15px); }
-    66% { transform: translate(-10px, 15px); }
+
+    0%,
+    100% {
+      transform: translate(0, 0);
+    }
+
+    33% {
+      transform: translate(10px, -15px);
+    }
+
+    66% {
+      transform: translate(-10px, 15px);
+    }
   }
 }
 
@@ -33,7 +46,7 @@
 
 @layer utilities {
   .ios-glass {
-    @apply bg-white/70 dark:bg-black/40 backdrop-blur-[20px] backdrop-saturate-[180%] border border-white/40 dark:border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_30px_rgba(0,0,0,0.2)];
+    @apply bg-white/70 dark:bg-black/40 backdrop-blur-[20px] backdrop-saturate-[180%] border border-white/40 dark:border-white/10 shadow-ios-glass dark:shadow-ios-glass-dark;
   }
 
   .premium-panel {
@@ -66,6 +79,14 @@
 
   .ios-active-link {
     @apply bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-xl shadow-slate-900/10 dark:shadow-white/10 scale-[1.02];
+  }
+
+  .liquid-glass-panel {
+    @apply bg-white/40 dark:bg-[#1c1c1e]/60 backdrop-blur-xl border border-white/30 dark:border-white/10 rounded-3xl shadow-xl transition-all duration-500;
+  }
+
+  .liquid-glass-panel-solid {
+    @apply bg-white dark:bg-[#1c1c1e] border border-gray-200 dark:border-gray-800 rounded-3xl shadow-2xl transition-all duration-500;
   }
 
   .custom-scrollbar::-webkit-scrollbar {

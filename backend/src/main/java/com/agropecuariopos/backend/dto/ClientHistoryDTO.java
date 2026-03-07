@@ -19,22 +19,27 @@ public class ClientHistoryDTO {
     private BigDecimal totalPurchases;
     private BigDecimal totalPaid;
     private BigDecimal totalPending;
-    private List<PurchaseHistoryItemDTO> purchases;
+    private List<TransactionHistoryItemDTO> transactions;
+
+    public enum TransactionType {
+        SALE, PAYMENT
+    }
 
     @Getter
     @Setter
     @AllArgsConstructor
-    public static class PurchaseHistoryItemDTO {
-
-        private Long saleId;
-        private String invoiceNumber;
-        private LocalDateTime saleDate;
-        private String paymentMethod;
-        private BigDecimal amount;
+    public static class TransactionHistoryItemDTO {
+        private Long id; // saleId or paymentId
+        private String referenceNumber; // invoiceNumber or "ABONO-..."
+        private LocalDateTime date;
+        private String method; // paymentMethod
+        private BigDecimal totalAmount;
         private BigDecimal amountPaid;
         private BigDecimal remainingBalance;
-        private String status; // COMPLETED, PAID_IN_FULL, PARTIAL, PENDING
-        private List<PurchaseItemDetailDTO> items;
+        private String status;
+        private TransactionType type;
+        private List<PurchaseItemDetailDTO> items; // null for payments
+        private String relatedInvoice; // For payments, the invoice it was applied to
     }
 
     @Getter

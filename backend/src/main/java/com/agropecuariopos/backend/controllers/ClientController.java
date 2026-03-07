@@ -3,9 +3,11 @@ package com.agropecuariopos.backend.controllers;
 import com.agropecuariopos.backend.dto.ClientHistoryDTO;
 import com.agropecuariopos.backend.models.AccountReceivable;
 import com.agropecuariopos.backend.models.Client;
+import com.agropecuariopos.backend.models.PaymentRecord;
 import com.agropecuariopos.backend.models.Sale;
 import com.agropecuariopos.backend.repositories.AccountReceivableRepository;
 import com.agropecuariopos.backend.repositories.ClientRepository;
+import com.agropecuariopos.backend.repositories.PaymentRecordRepository;
 import com.agropecuariopos.backend.repositories.SaleRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.lang.Nullable;
@@ -13,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -29,6 +32,9 @@ public class ClientController {
 
     @Autowired
     private AccountReceivableRepository accountReceivableRepository;
+
+    @Autowired
+    private PaymentRecordRepository paymentRecordRepository;
 
     @GetMapping
     public List<Client> getAllClients() {
@@ -53,7 +59,7 @@ public class ClientController {
 
         BigDecimal totalPurchases = BigDecimal.ZERO;
         BigDecimal totalPaid = BigDecimal.ZERO;
-        List<ClientHistoryDTO.PurchaseHistoryItemDTO> purchaseHistory = new ArrayList<>();
+        List<ClientHistoryDTO.TransactionHistoryItemDTO> transactionHistory = new ArrayList<>();
 
         for (Sale sale : sales) {
             totalPurchases = totalPurchases.add(sale.getFinalTotal());
@@ -61,19 +67,39 @@ public class ClientController {
             // Get associated account receivable if exists
             Optional<AccountReceivable> receivableOpt = accountReceivableRepository.findByRelatedSale(sale);
             BigDecimal amountPaid = BigDecimal.ZERO;
-            String status = "COMPLETED";
+            String status = "PAID_IN_FULL";
 
-            if (receivableOpt.isPresent()) {
+            if (sale.getStatus() == Sale.SaleStatus.CANCELLED) {
+                status = "CANCELLED";
+                // If cancelled, we might still have a receivable but we mark it as cancelled
+            } else if (receivableOpt.isPresent()) {
                 AccountReceivable receivable = receivableOpt.get();
                 amountPaid = receivable.getAmountPaid();
                 status = receivable.getStatus().toString();
                 totalPaid = totalPaid.add(amountPaid);
-            } else {
-                // Si no hay receivable, significa que fue pagado en su totalidad al momento
-                if (sale.getPaymentMethod() != Sale.PaymentMethod.CREDIT) {
-                    amountPaid = sale.getFinalTotal();
-                    totalPaid = totalPaid.add(amountPaid);
+
+                // Add payments for this specific receivable
+                List<PaymentRecord> payments = paymentRecordRepository
+                        .findByAccountReceivableIdOrderByPaymentDateDesc(receivable.getId());
+                for (PaymentRecord payment : payments) {
+                    transactionHistory.add(new ClientHistoryDTO.TransactionHistoryItemDTO(
+                            payment.getId(),
+                            "ABONO-" + payment.getId(),
+                            payment.getPaymentDate(),
+                            "CASH", // Assuming cash for simple abonos
+                            payment.getAmount(),
+                            payment.getAmount(),
+                            payment.getNewBalance(),
+                            "COMPLETED",
+                            ClientHistoryDTO.TransactionType.PAYMENT,
+                            null,
+                            sale.getInvoiceNumber()));
                 }
+            } else {
+                // Si no hay receivable y no está cancelada, significa que fue pagada en su
+                // totalidad al momento
+                amountPaid = sale.getFinalTotal();
+                totalPaid = totalPaid.add(amountPaid);
             }
 
             BigDecimal remainingBalance = sale.getFinalTotal().subtract(amountPaid);
@@ -81,14 +107,13 @@ public class ClientController {
             // Build items list
             List<ClientHistoryDTO.PurchaseItemDetailDTO> items = sale.getItems().stream()
                     .map(item -> new ClientHistoryDTO.PurchaseItemDetailDTO(
-                    item.getProduct().getName(),
-                    item.getQuantity(),
-                    item.getUnitPriceAtSale(),
-                    item.getLineTotal()
-            ))
+                            item.getProduct().getName(),
+                            item.getQuantity(),
+                            item.getUnitPriceAtSale(),
+                            item.getLineTotal()))
                     .collect(Collectors.toList());
 
-            ClientHistoryDTO.PurchaseHistoryItemDTO historyItem = new ClientHistoryDTO.PurchaseHistoryItemDTO(
+            ClientHistoryDTO.TransactionHistoryItemDTO historyItem = new ClientHistoryDTO.TransactionHistoryItemDTO(
                     sale.getId(),
                     sale.getInvoiceNumber(),
                     sale.getCreatedDate(),
@@ -97,11 +122,15 @@ public class ClientController {
                     amountPaid,
                     remainingBalance,
                     status,
-                    items
-            );
+                    ClientHistoryDTO.TransactionType.SALE,
+                    items,
+                    null);
 
-            purchaseHistory.add(historyItem);
+            transactionHistory.add(historyItem);
         }
+
+        // Sort all by date descending
+        transactionHistory.sort(Comparator.comparing(ClientHistoryDTO.TransactionHistoryItemDTO::getDate).reversed());
 
         BigDecimal totalPending = totalPurchases.subtract(totalPaid);
 
@@ -112,7 +141,6 @@ public class ClientController {
                 totalPurchases,
                 totalPaid,
                 totalPending,
-                purchaseHistory
-        );
+                transactionHistory);
     }
 }

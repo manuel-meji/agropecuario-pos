@@ -4,27 +4,34 @@ import com.agropecuariopos.backend.dto.SaleRequest;
 import com.agropecuariopos.backend.dto.SaleResponse;
 import com.agropecuariopos.backend.models.AccountReceivable;
 import com.agropecuariopos.backend.models.Client;
+import com.agropecuariopos.backend.models.PaymentRecord;
 import com.agropecuariopos.backend.models.Product;
 import com.agropecuariopos.backend.models.Sale;
 import com.agropecuariopos.backend.models.SaleItem;
 import com.agropecuariopos.backend.repositories.AccountReceivableRepository;
 import com.agropecuariopos.backend.repositories.ClientRepository;
+import com.agropecuariopos.backend.repositories.PaymentRecordRepository;
 import com.agropecuariopos.backend.repositories.ProductRepository;
 import com.agropecuariopos.backend.repositories.SaleRepository;
 import com.agropecuariopos.backend.dto.DeleteSaleRequest;
 import com.agropecuariopos.backend.security.UserDetailsImpl;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/sales")
@@ -45,9 +52,77 @@ public class SaleController {
     @Autowired
     private PasswordEncoder encoder;
 
+    @Autowired
+    private PaymentRecordRepository paymentRecordRepository;
+
     @GetMapping
-    public List<Sale> getAllSales() {
-        return saleRepository.findAll();
+    public List<SaleResponse> getAllSales(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate) {
+
+        List<Sale> sales;
+        List<PaymentRecord> payments;
+
+        if (startDate != null && endDate != null) {
+            sales = saleRepository.findByCreatedDateBetween(startDate, endDate);
+            // We need to find payments between dates too.
+            // I'll assume standard JpaRepository findByPaymentDateBetween exists or I'll
+            // add it.
+            payments = paymentRecordRepository.findAll().stream()
+                    .filter(p -> p.getPaymentDate().isAfter(startDate) && p.getPaymentDate().isBefore(endDate))
+                    .collect(Collectors.toList());
+        } else {
+            sales = saleRepository.findAll();
+            payments = paymentRecordRepository.findAll();
+        }
+
+        List<SaleResponse> response = new ArrayList<>();
+
+        // Map Sales
+        for (Sale sale : sales) {
+            List<String> saleCategories = sale.getItems().stream()
+                    .map(item -> item.getProduct().getCategory().getName())
+                    .distinct()
+                    .collect(Collectors.toList());
+
+            response.add(new SaleResponse(
+                    sale.getId(),
+                    sale.getInvoiceNumber(),
+                    sale.getPaymentMethod().toString(),
+                    sale.getStatus().toString(),
+                    sale.getSubtotal(),
+                    sale.getTotalTax(),
+                    sale.getFinalTotal(),
+                    sale.getClientName(),
+                    sale.getCreatedDate(),
+                    "SALE",
+                    saleCategories));
+        }
+
+        // Map Payments
+        for (PaymentRecord payment : payments) {
+            response.add(new SaleResponse(
+                    payment.getId(),
+                    "ABONO-" + payment.getId() + " ("
+                            + (payment.getAccountReceivable().getRelatedSale() != null
+                                    ? payment.getAccountReceivable().getRelatedSale().getInvoiceNumber()
+                                    : "N/A")
+                            + ")",
+                    "CASH",
+                    "COMPLETED",
+                    payment.getAmount(),
+                    BigDecimal.ZERO,
+                    payment.getAmount(),
+                    payment.getAccountReceivable().getClientName(),
+                    payment.getPaymentDate(),
+                    "PAYMENT",
+                    new ArrayList<>()));
+        }
+
+        // Sort by date descending
+        response.sort(Comparator.comparing(SaleResponse::getCreatedDate).reversed());
+
+        return response;
     }
 
     @GetMapping("/{id}")
@@ -154,6 +229,11 @@ public class SaleController {
             accountReceivableRepository.save(receivable);
         }
 
+        List<String> saleCategories = savedSale.getItems().stream()
+                .map(item -> item.getProduct().getCategory().getName())
+                .distinct()
+                .collect(Collectors.toList());
+
         return new SaleResponse(
                 savedSale.getId(),
                 savedSale.getInvoiceNumber(),
@@ -163,6 +243,8 @@ public class SaleController {
                 savedSale.getTotalTax(),
                 savedSale.getFinalTotal(),
                 savedSale.getClientName(),
-                savedSale.getCreatedDate());
+                savedSale.getCreatedDate(),
+                "SALE",
+                saleCategories);
     }
 }
