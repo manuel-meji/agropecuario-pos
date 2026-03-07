@@ -11,13 +11,20 @@ import com.agropecuariopos.backend.repositories.AccountReceivableRepository;
 import com.agropecuariopos.backend.repositories.ClientRepository;
 import com.agropecuariopos.backend.repositories.ProductRepository;
 import com.agropecuariopos.backend.repositories.SaleRepository;
+import com.agropecuariopos.backend.dto.DeleteSaleRequest;
+import com.agropecuariopos.backend.security.UserDetailsImpl;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.http.HttpStatus;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/sales")
@@ -35,9 +42,54 @@ public class SaleController {
     @Autowired
     private AccountReceivableRepository accountReceivableRepository;
 
+    @Autowired
+    private PasswordEncoder encoder;
+
     @GetMapping
     public List<Sale> getAllSales() {
         return saleRepository.findAll();
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<Sale> getSaleById(@PathVariable Long id) {
+        return saleRepository.findById(id)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @DeleteMapping("/{id}")
+    @Transactional
+    public ResponseEntity<?> deleteSale(@PathVariable Long id, @RequestBody DeleteSaleRequest deleteRequest) {
+        Sale sale = saleRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Venta no encontrada"));
+
+        // Verificar contraseña del usuario actual
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof UserDetailsImpl)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Sesión inválida o no autenticada.");
+        }
+
+        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+        if (!encoder.matches(deleteRequest.getPassword(), userDetails.getPassword())) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body("Contraseña incorrecta. No se puede eliminar la venta.");
+        }
+
+        // Restaurar stock de productos
+        for (SaleItem item : sale.getItems()) {
+            Product product = item.getProduct();
+            product.setStockQuantity(product.getStockQuantity() + item.getQuantity());
+            productRepository.save(product);
+        }
+
+        // Eliminar cuenta por cobrar si existía
+        Optional<AccountReceivable> receivable = accountReceivableRepository.findByRelatedSale(sale);
+        receivable.ifPresent(accountReceivableRepository::delete);
+
+        // Eliminar la venta
+        saleRepository.delete(sale);
+
+        return ResponseEntity.ok("Venta eliminada exitosamente");
     }
 
     @PostMapping
@@ -111,7 +163,6 @@ public class SaleController {
                 savedSale.getTotalTax(),
                 savedSale.getFinalTotal(),
                 savedSale.getClientName(),
-                savedSale.getCreatedDate()
-        );
+                savedSale.getCreatedDate());
     }
 }
