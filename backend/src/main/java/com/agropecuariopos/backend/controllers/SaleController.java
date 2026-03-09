@@ -175,6 +175,14 @@ public class SaleController {
         sale.setPaymentMethod(Sale.PaymentMethod.valueOf(request.getPaymentMethod().toString()));
         sale.setStatus(Sale.SaleStatus.COMPLETED);
         sale.setSubtotal(BigDecimal.valueOf(request.getSubtotal()));
+        
+        // Process discount
+        BigDecimal discountAmount = BigDecimal.ZERO;
+        if (request.getTotalDiscount() != null) {
+            discountAmount = request.getTotalDiscount();
+        }
+        sale.setTotalDiscount(discountAmount);
+        
         sale.setTotalTax(BigDecimal.valueOf(request.getTax()));
         sale.setFinalTotal(BigDecimal.valueOf(request.getTotal()));
         sale.setCreatedDate(LocalDateTime.now());
@@ -209,6 +217,7 @@ public class SaleController {
             item.setQuantity(itemReq.getQty());
             item.setUnitPriceAtSale(product.getSalePrice());
             item.setUnitCostAtSale(product.getPurchaseCost());
+            item.setLineTotal(product.getSalePrice().multiply(BigDecimal.valueOf(itemReq.getQty())));
 
             item.setSale(sale);
             sale.getItems().add(item);

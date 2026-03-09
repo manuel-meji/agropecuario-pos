@@ -40,6 +40,7 @@ public class ClientHistoryDTO {
         private TransactionType type;
         private List<PurchaseItemDetailDTO> items; // null for payments
         private String relatedInvoice; // For payments, the invoice it was applied to
+        private BigDecimal discountAmount; // discount applied to this sale
     }
 
     @Getter

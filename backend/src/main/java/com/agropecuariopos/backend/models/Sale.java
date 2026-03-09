@@ -82,10 +82,10 @@ public class Sale {
     private LocalDateTime createdDate;
 
     public enum PaymentMethod {
-        CASH, CARD, TRANSFER, CREDIT, SIMPE_MOVIL
+        CASH, CARD, TRANSFER, CREDIT, SIMPE_MOVIL, SINPE_MOVIL
     }
 
     public enum SaleStatus {
-        COMPLETED, CANCELLED, CONTINGENCY_PENDING
+        COMPLETED, CANCELLED, CONTINGENCY_PENDING, PARTIAL
     }
 }

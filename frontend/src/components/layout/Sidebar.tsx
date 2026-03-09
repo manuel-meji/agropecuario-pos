@@ -11,7 +11,8 @@ import {
   Receipt,
   Wallet,
   Truck,
-  Leaf
+  Leaf,
+  TrendingDown
 } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -28,6 +29,7 @@ const Sidebar = () => {
     { name: "Cuentas por Cobrar", path: "/receivables", icon: Wallet },
     { name: "Cuentas por Pagar", path: "/payables", icon: CreditCard },
     { name: "Módulo Tributario", path: "/taxes", icon: FileSpreadsheet },
+    { name: "Gastos", path: "/expenses", icon: TrendingDown },
     { name: "Configuración", path: "/settings", icon: Settings }
   ];
 

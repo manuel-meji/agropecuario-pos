@@ -307,6 +307,12 @@ export default function ClientsView() {
                                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Monto Pagado</p>
                                   <p className="font-bold text-slate-800 dark:text-slate-200">₡{item.amountPaid?.toLocaleString()}</p>
                                 </div>
+                                {item.discountAmount != null && Number(item.discountAmount) > 0 && (
+                                  <div>
+                                    <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-1">Descuento</p>
+                                    <p className="font-black text-amber-600 dark:text-amber-400">−₡{Number(item.discountAmount).toLocaleString()}</p>
+                                  </div>
+                                )}
                                 {item.remainingBalance > 0 && (
                                   <div>
                                     <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-1">Saldo Restante</p>
@@ -318,15 +324,22 @@ export default function ClientsView() {
                               <div className="mt-8 pt-6 border-t border-slate-200/50 dark:border-slate-800/50">
                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Desglose de Artículos</p>
                                 <div className="space-y-3">
-                                  {item.items?.map((detail: any, idx: number) => (
-                                    <div key={idx} className="flex justify-between items-center bg-white dark:bg-slate-900/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 text-sm">
-                                      <div className="flex items-center gap-3 font-bold text-slate-700 dark:text-slate-300">
-                                        <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xs font-black">{detail.quantity}</div>
-                                        {detail.productName}
+                                  {item.items?.map((detail: any, idx: number) => {
+                                    const unitPrice = detail.unitPrice ?? 0;
+                                    const lineTotal = detail.totalPrice ?? (unitPrice * detail.quantity);
+                                    return (
+                                      <div key={idx} className="flex justify-between items-center bg-white dark:bg-slate-900/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 text-sm">
+                                        <div className="flex items-center gap-3 font-bold text-slate-700 dark:text-slate-300">
+                                          <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xs font-black">{detail.quantity}</div>
+                                          <div>
+                                            <p className="font-bold text-slate-800 dark:text-slate-200">{detail.productName}</p>
+                                            <p className="text-[10px] text-slate-400 font-bold mt-0.5">₡{unitPrice.toLocaleString()} c/u</p>
+                                          </div>
+                                        </div>
+                                        <span className="font-black text-slate-900 dark:text-white">₡{lineTotal.toLocaleString()}</span>
                                       </div>
-                                      <span className="font-black text-slate-900 dark:text-white">₡{detail.totalPrice?.toLocaleString()}</span>
-                                    </div>
-                                  ))}
+                                    );
+                                  })}
                                 </div>
                               </div>
                             </motion.div>

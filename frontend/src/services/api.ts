@@ -44,5 +44,10 @@ export const getClientHistoryByClientId = (clientId: number) => api.get(`/client
 export const makePayment = (id: number, amount: number) => api.post(`/accounts-receivable/${id}/pay`, { amount }).then(res => res.data);
 export const getPaymentRecords = () => api.get('/accounts-receivable/payments').then(res => res.data);
 
+// Cash Closing
+export const getCashClosingPreview = () => api.get('/cash-closing/preview').then(res => res.data);
+export const createCashClosing = (notes?: string) => api.post('/cash-closing', null, { params: { notes } }).then(res => res.data);
+export const getCashClosingHistory = () => api.get('/cash-closing').then(res => res.data);
+
 export default api;
 

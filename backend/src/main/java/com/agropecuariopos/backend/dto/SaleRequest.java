@@ -23,6 +23,9 @@ public class SaleRequest {
 
     @DecimalMin("0.0")
     private BigDecimal totalDiscount;
+    
+    private String discountType; // "percentage" or "fixed"
+    private Double discountValue; // the value of the discount (percentage or amount)
 
     private double subtotal;
     private double tax;

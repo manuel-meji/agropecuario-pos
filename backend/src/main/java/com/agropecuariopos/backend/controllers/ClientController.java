@@ -93,7 +93,8 @@ public class ClientController {
                             "COMPLETED",
                             ClientHistoryDTO.TransactionType.PAYMENT,
                             null,
-                            sale.getInvoiceNumber()));
+                            sale.getInvoiceNumber(),
+                            null));
                 }
             } else {
                 // Si no hay receivable y no está cancelada, significa que fue pagada en su
@@ -124,7 +125,8 @@ public class ClientController {
                     status,
                     ClientHistoryDTO.TransactionType.SALE,
                     items,
-                    null);
+                    null,
+                    sale.getTotalDiscount());
 
             transactionHistory.add(historyItem);
         }

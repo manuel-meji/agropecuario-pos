@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search,
-  Filter,
   Eye,
   Trash2,
   Receipt,
@@ -357,8 +356,14 @@ export default function SalesView() {
                   <span>Subtotal:</span>
                   <span>₡{selectedSale.subtotal?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                 </div>
+                {selectedSale.totalDiscount != null && Number(selectedSale.totalDiscount) > 0 && (
+                  <div className="flex justify-between text-xs text-amber-600 dark:text-amber-400 font-bold">
+                    <span>Descuento:</span>
+                    <span>−₡{Number(selectedSale.totalDiscount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-xs text-gray-500">
-                  <span>IVA (13%):</span>
+                  <span>IVA:</span>
                   <span>₡{selectedSale.totalTax?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex justify-between text-base font-bold text-gray-900 dark:text-white pt-1 border-t border-gray-100 dark:border-gray-800">

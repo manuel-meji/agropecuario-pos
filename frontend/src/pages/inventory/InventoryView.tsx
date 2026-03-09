@@ -9,6 +9,7 @@ import {
   getProducts, getCategories, createProduct, createCategory,
   updateProduct, updateCategory, deleteCategory
 } from '../../services/api';
+import ProfitCalculator from '../../components/ProfitCalculator';
 
 // ─── Searchable Category Select ────────────────────────────────────────────────
 function CategorySelect({ categories, value, onChange }: {
@@ -389,6 +390,7 @@ export default function InventoryView() {
   const [newProduct, setNewProduct] = useState({
     name: '', internalCode: '', cabysCode: '',
     purchaseCost: 0, salePrice: 0, stockQuantity: 0,
+    taxRate: 13,
     category: { id: '' }
   });
 
@@ -424,7 +426,7 @@ export default function InventoryView() {
       }
       setIsProductModalOpen(false);
       setEditingProductId(null);
-      setNewProduct({ name: '', internalCode: '', cabysCode: '', purchaseCost: 0, salePrice: 0, stockQuantity: 0, category: { id: '' } });
+      setNewProduct({ name: '', internalCode: '', cabysCode: '', purchaseCost: 0, salePrice: 0, stockQuantity: 0, taxRate: 13, category: { id: '' } });
       loadData();
     } catch (error) {
       console.error(error);
@@ -441,6 +443,7 @@ export default function InventoryView() {
       purchaseCost: item.purchaseCost || 0,
       salePrice: item.salePrice || 0,
       stockQuantity: item.stockQuantity || 0,
+      taxRate: item.taxRate ?? 13,
       category: { id: item.category?.id?.toString() || '' }
     });
     setIsProductModalOpen(true);
@@ -482,7 +485,7 @@ export default function InventoryView() {
           <button
             onClick={() => {
               setEditingProductId(null);
-              setNewProduct({ name: '', internalCode: '', cabysCode: '', purchaseCost: 0, salePrice: 0, stockQuantity: 0, category: { id: '' } });
+              setNewProduct({ name: '', internalCode: '', cabysCode: '', purchaseCost: 0, salePrice: 0, stockQuantity: 0, taxRate: 13, category: { id: '' } });
               setIsProductModalOpen(true);
             }}
             className="btn-premium-emerald flex items-center justify-center gap-2"
@@ -628,58 +631,102 @@ export default function InventoryView() {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white dark:bg-slate-900 rounded-[40px] p-10 w-full max-w-xl shadow-2xl relative z-10 overflow-hidden"
+              className="bg-white dark:bg-slate-900 rounded-[40px] w-full max-w-xl shadow-2xl relative z-10 flex flex-col overflow-hidden"
+              style={{ maxHeight: 'min(90vh, 780px)' }}
             >
-              <div className="absolute top-[-50px] right-[-50px] w-48 h-48 bg-blue-500/10 blur-[60px] rounded-full" />
-              <h3 className="text-2xl font-black mb-1 relative">
-                {editingProductId ? 'Modificar Producto' : 'Nuevo Producto'}
-              </h3>
-              <p className="text-slate-500 text-sm mb-8 relative font-medium">Información técnica del artículo en almacén.</p>
+              {/* Deco blob */}
+              <div className="absolute top-[-50px] right-[-50px] w-48 h-48 bg-blue-500/10 blur-[60px] rounded-full pointer-events-none" />
 
-              <div className="grid grid-cols-2 gap-4 mb-8 relative">
-                <div className="col-span-2">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Descripción Comercial</label>
-                  <input type="text" placeholder="Ej. Fertilizante QPK 100 ml" className="premium-input w-full"
-                    value={newProduct.name} onChange={e => setNewProduct({ ...newProduct, name: e.target.value })} />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Código Interno / SKU</label>
-                  <input type="text" placeholder="SKU-2353" className="premium-input w-full"
-                    value={newProduct.internalCode} onChange={e => setNewProduct({ ...newProduct, internalCode: e.target.value })} />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Código CABYS</label>
-                  <input type="text" placeholder="13 dígitos..." className="premium-input w-full"
-                    value={newProduct.cabysCode} onChange={e => setNewProduct({ ...newProduct, cabysCode: e.target.value })} />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Costo Compra (₡)</label>
-                  <input type="number" placeholder="₡ 0" className="premium-input w-full"
-                    value={newProduct.purchaseCost || ''} onChange={e => setNewProduct({ ...newProduct, purchaseCost: parseFloat(e.target.value) })} />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Precio Venta (₡)</label>
-                  <input type="number" placeholder="₡ 0" className="premium-input w-full"
-                    value={newProduct.salePrice || ''} onChange={e => setNewProduct({ ...newProduct, salePrice: parseFloat(e.target.value) })} />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Stock Disponible</label>
-                  <input type="number" placeholder="Cantidad..." className="premium-input w-full"
-                    value={newProduct.stockQuantity || ''} onChange={e => setNewProduct({ ...newProduct, stockQuantity: parseInt(e.target.value) })} />
-                </div>
+              {/* ── Header (fijo) ── */}
+              <div className="px-10 pt-10 pb-4 shrink-0 relative">
+                <h3 className="text-2xl font-black mb-1">
+                  {editingProductId ? 'Modificar Producto' : 'Nuevo Producto'}
+                </h3>
+                <p className="text-slate-500 text-sm font-medium">Información técnica del artículo en almacén.</p>
+              </div>
 
-                {/* ← Searchable category select */}
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Categoría</label>
-                  <CategorySelect
-                    categories={categories}
-                    value={newProduct.category.id}
-                    onChange={id => setNewProduct({ ...newProduct, category: { id } })}
-                  />
+              {/* ── Scrollable fields ── */}
+              <div className="flex-1 overflow-y-auto custom-scrollbar px-10 pb-2 relative">
+                <div className="grid grid-cols-2 gap-4 pb-2">
+                  <div className="col-span-2">
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Descripción Comercial</label>
+                    <input type="text" placeholder="Ej. Fertilizante QPK 100 ml" className="premium-input w-full"
+                      value={newProduct.name} onChange={e => setNewProduct({ ...newProduct, name: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Código Interno / SKU</label>
+                    <input type="text" placeholder="SKU-2353" className="premium-input w-full"
+                      value={newProduct.internalCode} onChange={e => setNewProduct({ ...newProduct, internalCode: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Código CABYS</label>
+                    <input type="text" placeholder="13 dígitos..." className="premium-input w-full"
+                      value={newProduct.cabysCode} onChange={e => setNewProduct({ ...newProduct, cabysCode: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Costo Compra (₡)</label>
+                    <input type="number" placeholder="₡ 0" className="premium-input w-full"
+                      value={newProduct.purchaseCost || ''} onChange={e => setNewProduct({ ...newProduct, purchaseCost: parseFloat(e.target.value) })} />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Precio Venta (₡)</label>
+                    <input type="number" placeholder="₡ 0" className="premium-input w-full"
+                      value={newProduct.salePrice || ''} onChange={e => setNewProduct({ ...newProduct, salePrice: parseFloat(e.target.value) })} />
+                  </div>
+
+                  {/* Profit Calculator */}
+                  {newProduct.purchaseCost > 0 && (
+                    <div className="col-span-2">
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Calculadora de Ganancia</label>
+                      <ProfitCalculator
+                        purchaseCost={newProduct.purchaseCost}
+                        salePrice={newProduct.salePrice || 0}
+                        onPriceChange={(newPrice) => setNewProduct({ ...newProduct, salePrice: newPrice })}
+                      />
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Stock Disponible</label>
+                    <input type="number" placeholder="Cantidad..." className="premium-input w-full"
+                      value={newProduct.stockQuantity || ''} onChange={e => setNewProduct({ ...newProduct, stockQuantity: parseInt(e.target.value) })} />
+                  </div>
+
+                  {/* Searchable category select */}
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Categoría</label>
+                    <CategorySelect
+                      categories={categories}
+                      value={newProduct.category.id}
+                      onChange={id => setNewProduct({ ...newProduct, category: { id } })}
+                    />
+                  </div>
+
+                  {/* Tax Rate selector */}
+                  <div className="col-span-2">
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Tasa de Impuesto (IVA)</label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {[{ label: '0% Exento', value: 0 }, { label: '1% Agroc.', value: 1 }, { label: '4% Reducido', value: 4 }, { label: '13% Estándar', value: 13 }].map(opt => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => setNewProduct({ ...newProduct, taxRate: opt.value })}
+                          className={`py-2.5 rounded-xl text-xs font-black border-2 transition-all ${
+                            newProduct.taxRate === opt.value
+                              ? 'border-premium-emerald bg-premium-emerald/10 text-premium-emerald'
+                              : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:border-slate-300'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex gap-4 relative">
+              {/* ── Footer (fijo) ── */}
+              <div className="px-10 py-6 shrink-0 border-t border-slate-100 dark:border-slate-800 flex gap-4">
                 <button onClick={() => setIsProductModalOpen(false)}
                   className="flex-1 py-4 text-slate-500 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 rounded-2xl transition-colors">
                   Cancelar

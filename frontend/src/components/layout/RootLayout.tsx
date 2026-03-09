@@ -3,7 +3,6 @@ import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import { useThemeStore } from "../../store/themeStore";
 import { Moon, Sun, Bell, Search as SearchIcon, LogOut } from "lucide-react";
-import { motion } from "framer-motion";
 import authService from "../../services/authService";
 
 export default function RootLayout() {
@@ -49,6 +48,7 @@ export default function RootLayout() {
       '/clients': 'Directorio de Clientes',
       '/suppliers': 'Gestión de Proveedores',
       '/taxes': 'Módulo Tributario',
+      '/expenses': 'Registro de Gastos',
       '/settings': 'Configuración',
       '/pos': 'Terminal de Ventas'
     };
@@ -57,31 +57,29 @@ export default function RootLayout() {
 
   return (
     <div className="flex h-screen overflow-hidden relative font-sans">
-      {/* Mesh Background Circles */}
-      <div className="mesh-bg overflow-hidden p-0 m-0">
-        <div className="mesh-circle w-[500px] h-[500px] bg-premium-emerald top-[-100px] right-[-100px] animate-premium-float"></div>
-        <div className="mesh-circle w-[300px] h-[300px] bg-blue-500 bottom-[10%] left-[-50px] animate-premium-float" style={{ animationDelay: '2s' }}></div>
-        <div className="mesh-circle w-[400px] h-[400px] bg-purple-500 bottom-[-100px] right-[20%] animate-premium-float" style={{ animationDelay: '4s' }}></div>
+      {/* Mesh Background — sin animación para evitar compositor overhead en scroll */}
+      <div className="mesh-bg overflow-hidden p-0 m-0 print:hidden">
+        <div className="mesh-circle w-[600px] h-[600px] bg-premium-emerald top-[-150px] right-[-150px]" />
+        <div className="mesh-circle w-[350px] h-[350px] bg-blue-500 bottom-[10%] left-[-80px]" />
+        <div className="mesh-circle w-[450px] h-[450px] bg-purple-500 bottom-[-120px] right-[15%]" />
       </div>
 
       {/* Sidebar Navigation */}
-      <div className="z-30 hidden md:block">
+      <div className="z-30 hidden md:block print:hidden">
         <Sidebar />
       </div>
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col relative z-10 h-full overflow-hidden">
         {/* iOS Style Top Navigation Bar */}
-        <header className="h-20 flex items-center justify-between px-8 z-20 shrink-0">
+        <header className="h-20 flex items-center justify-between px-8 z-20 shrink-0 print:hidden">
           <div className="flex flex-col">
-            <motion.h1
+            <h1
               key={location.pathname}
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
               className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight"
             >
               {getPageTitle()}
-            </motion.h1>
+            </h1>
             <span className="text-xs text-slate-500 font-medium">Agropecuario POS v4.0</span>
           </div>
 
@@ -129,15 +127,12 @@ export default function RootLayout() {
 
         {/* Page Container */}
         <div className="flex-1 overflow-hidden z-10 w-full h-full px-8 pb-8">
-          <motion.div
+          <div
             key={location.pathname}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
-            className="h-full w-full custom-scrollbar overflow-auto"
+            className="h-full w-full overflow-hidden page-enter"
           >
             <Outlet />
-          </motion.div>
+          </div>
         </div>
       </main>
     </div>

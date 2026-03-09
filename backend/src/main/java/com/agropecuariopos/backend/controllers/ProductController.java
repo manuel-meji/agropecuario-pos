@@ -34,6 +34,8 @@ public class ProductController {
         existing.setSalePrice(product.getSalePrice());
         existing.setStockQuantity(product.getStockQuantity());
         existing.setCategory(product.getCategory());
+        existing.setTaxRate(product.getTaxRate());
+        existing.setIsAgrochemicalInsufficiency(product.getIsAgrochemicalInsufficiency());
         return productRepository.save(existing);
     }
 }

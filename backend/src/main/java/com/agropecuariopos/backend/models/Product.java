@@ -46,9 +46,13 @@ public class Product {
     @Min(0)
     private Integer stockQuantity;
 
-    // Define exención impositiva (e.g. 1% agroquímicos si el cliente está en
-    // EXONET)
+    // Define exención impositiva (e.g. 1% agroquímicos si el cliente está en EXONET)
     private Boolean isAgrochemicalInsufficiency;
+
+    // Tasa de impuesto aplicable (%). 0 = exento, 1 = agroquímico, 13 = IVA estándar
+    @DecimalMin("0.0")
+    @Column(precision = 5, scale = 2, columnDefinition = "DECIMAL(5,2) DEFAULT 13.00")
+    private BigDecimal taxRate = BigDecimal.valueOf(13);
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_categoria")
