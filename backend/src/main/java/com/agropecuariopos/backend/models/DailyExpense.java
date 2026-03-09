@@ -50,6 +50,6 @@ public class DailyExpense {
     private LocalDateTime registeredDate;
 
     public enum ExpenseCategory {
-        OPERATIONAL_UTILITIES, PAYROLL, LOGISTICS, MAINTENANCE, TAXES, MISCELLANEOUS
+        OPERATIONAL_UTILITIES, PAYROLL, LOGISTICS, MAINTENANCE, TAXES, MISCELLANEOUS, OTROS
     }
 }

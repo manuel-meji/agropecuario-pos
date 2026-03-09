@@ -8,7 +8,7 @@ import toast from 'react-hot-toast';
 import api from '../../services/api';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
-type ExpenseCategory = 'OPERATIONAL_UTILITIES' | 'PAYROLL' | 'LOGISTICS' | 'MAINTENANCE' | 'TAXES' | 'MISCELLANEOUS';
+type ExpenseCategory = 'OPERATIONAL_UTILITIES' | 'PAYROLL' | 'LOGISTICS' | 'MAINTENANCE' | 'TAXES' | 'MISCELLANEOUS' | 'OTROS';
 
 interface Expense {
   id: number;
@@ -22,12 +22,13 @@ interface Expense {
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 const CATEGORIES: { value: ExpenseCategory; label: string; icon: React.ElementType; color: string; bg: string }[] = [
-  { value: 'OPERATIONAL_UTILITIES', label: 'Servicios / Utilidades', icon: Zap,          color: 'text-blue-600',   bg: 'bg-blue-50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-800' },
-  { value: 'PAYROLL',               label: 'Planilla / Salarios',    icon: Users,         color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20 border-purple-100 dark:border-purple-800' },
-  { value: 'LOGISTICS',             label: 'Logística / Transporte', icon: Truck,         color: 'text-amber-600',  bg: 'bg-amber-50 dark:bg-amber-900/20 border-amber-100 dark:border-amber-800' },
-  { value: 'MAINTENANCE',           label: 'Mantenimiento',          icon: Wrench,        color: 'text-rose-600',   bg: 'bg-rose-50 dark:bg-rose-900/20 border-rose-100 dark:border-rose-800' },
-  { value: 'TAXES',                 label: 'Impuestos / Cargas',     icon: FileText,      color: 'text-red-600',    bg: 'bg-red-50 dark:bg-red-900/20 border-red-100 dark:border-red-800' },
-  { value: 'MISCELLANEOUS',         label: 'Misceláneos',            icon: MoreHorizontal, color: 'text-slate-600', bg: 'bg-slate-50 dark:bg-slate-900/20 border-slate-100 dark:border-slate-800' },
+  { value: 'OPERATIONAL_UTILITIES', label: 'Servicios / Utilidades', icon: Zap, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-800' },
+  { value: 'PAYROLL', label: 'Planilla / Salarios', icon: Users, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20 border-purple-100 dark:border-purple-800' },
+  { value: 'LOGISTICS', label: 'Logística / Transporte', icon: Truck, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/20 border-amber-100 dark:border-amber-800' },
+  { value: 'MAINTENANCE', label: 'Mantenimiento', icon: Wrench, color: 'text-rose-600', bg: 'bg-rose-50 dark:bg-rose-900/20 border-rose-100 dark:border-rose-800' },
+  { value: 'TAXES', label: 'Impuestos / Cargas', icon: FileText, color: 'text-red-600', bg: 'bg-red-50 dark:bg-red-900/20 border-red-100 dark:border-red-800' },
+  { value: 'MISCELLANEOUS', label: 'Misceláneos', icon: MoreHorizontal, color: 'text-slate-600', bg: 'bg-slate-50 dark:bg-slate-900/20 border-slate-100 dark:border-slate-800' },
+  { value: 'OTROS', label: 'Otros / Abonos', icon: Banknote, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-100 dark:border-emerald-800' },
 ];
 
 const getCat = (v: ExpenseCategory) => CATEGORIES.find(c => c.value === v) ?? CATEGORIES[5];
@@ -45,11 +46,11 @@ const EMPTY = (): Partial<Expense> => ({
 // ─── Main Component ────────────────────────────────────────────────────────────
 export default function ExpensesView() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [loading, setLoading]   = useState(false);
-  const [search, setSearch]     = useState('');
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState('');
   const [catFilter, setCatFilter] = useState<ExpenseCategory | 'ALL'>('ALL');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingId, setEditingId]     = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<Partial<Expense>>(EMPTY());
 
   // Date range filter (defaults: this month)
@@ -57,7 +58,7 @@ export default function ExpensesView() {
   const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
   const fmt8601 = (d: Date) => d.toISOString().split('T')[0];
   const [startDate, setStartDate] = useState(fmt8601(firstDay));
-  const [endDate,   setEndDate]   = useState(fmt8601(today));
+  const [endDate, setEndDate] = useState(fmt8601(today));
 
   // ── Load ─────────────────────────────────────────────────────────────────────
   const load = async () => {
@@ -70,12 +71,12 @@ export default function ExpensesView() {
   useEffect(() => { load(); }, [startDate, endDate]);
 
   // ── Totals ────────────────────────────────────────────────────────────────────
-  const totalAll    = expenses.reduce((s, e) => s + Number(e.amount), 0);
+  const totalAll = expenses.reduce((s, e) => s + Number(e.amount), 0);
   const totalDeduct = expenses.filter(e => e.isDeductibleFromProfit).reduce((s, e) => s + Number(e.amount), 0);
 
   // ── CRUD ──────────────────────────────────────────────────────────────────────
   const openCreate = () => { setForm(EMPTY()); setEditingId(null); setIsModalOpen(true); };
-  const openEdit   = (exp: Expense) => { setForm({ ...exp }); setEditingId(exp.id); setIsModalOpen(true); };
+  const openEdit = (exp: Expense) => { setForm({ ...exp }); setEditingId(exp.id); setIsModalOpen(true); };
 
   const handleSave = async () => {
     if (!form.description?.trim()) { toast.error('La descripción es obligatoria'); return; }
@@ -107,7 +108,7 @@ export default function ExpensesView() {
   // ── Filters ───────────────────────────────────────────────────────────────────
   const filtered = expenses.filter(e => {
     const matchSearch = e.description.toLowerCase().includes(search.toLowerCase());
-    const matchCat    = catFilter === 'ALL' || e.category === catFilter;
+    const matchCat = catFilter === 'ALL' || e.category === catFilter;
     return matchSearch && matchCat;
   });
 
@@ -347,9 +348,8 @@ export default function ExpensesView() {
                         <button
                           key={cat.value} type="button"
                           onClick={() => setForm({ ...form, category: cat.value })}
-                          className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-black border-2 transition-all text-left ${
-                            isSelected ? `border-current ${cat.bg} ${cat.color}` : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:border-slate-300'
-                          }`}
+                          className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-black border-2 transition-all text-left ${isSelected ? `border-current ${cat.bg} ${cat.color}` : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:border-slate-300'
+                            }`}
                         >
                           <Icon size={14} className="shrink-0" /> {cat.label}
                         </button>

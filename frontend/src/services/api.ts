@@ -44,10 +44,29 @@ export const getClientHistoryByClientId = (clientId: number) => api.get(`/client
 export const makePayment = (id: number, amount: number) => api.post(`/accounts-receivable/${id}/pay`, { amount }).then(res => res.data);
 export const getPaymentRecords = () => api.get('/accounts-receivable/payments').then(res => res.data);
 
+// Purchases
+export const getPurchases = () => api.get('/purchases').then(res => res.data);
+export const getPurchasesBySupplier = (supplierId: number) => api.get(`/purchases/supplier/${supplierId}`).then(res => res.data);
+export const createPurchase = (purchaseData: any) => api.post('/purchases', purchaseData).then(res => res.data);
+
+// Accounts Payable (CxP)
+export const getPayables = () => api.get('/accounts-payable').then(res => res.data);
+export const getPayableHistory = (supplierName: string) => api.get(`/accounts-payable/${encodeURIComponent(supplierName)}/history`).then(res => res.data);
+export const makePayablePayment = (id: number, amount: number) => api.post(`/accounts-payable/${id}/pay`, { amount }).then(res => res.data);
+export const getPayablePaymentRecords = async () => {
+  const response = await api.get('/accounts-payable/payments');
+  return response.data;
+};
+
+export const makeSupplierBulkPayment = async (supplierName: string, amount: number) => {
+  const response = await api.post(`/accounts-payable/supplier/${encodeURIComponent(supplierName)}/pay`, { amount });
+  return response.data;
+};
 // Cash Closing
 export const getCashClosingPreview = () => api.get('/cash-closing/preview').then(res => res.data);
 export const createCashClosing = (notes?: string) => api.post('/cash-closing', null, { params: { notes } }).then(res => res.data);
 export const getCashClosingHistory = () => api.get('/cash-closing').then(res => res.data);
 
 export default api;
+
 
