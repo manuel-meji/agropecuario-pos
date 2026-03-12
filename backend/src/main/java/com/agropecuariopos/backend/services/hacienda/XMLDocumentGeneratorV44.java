@@ -266,6 +266,31 @@ public class XMLDocumentGeneratorV44 {
         }
         xml.append("    <TotalVentaNeta>").append(totalVentaNeta.setScale(5, RoundingMode.HALF_UP).toPlainString()).append("</TotalVentaNeta>\n");
 
+        // Agrupar impuestos para generar TotalDesgloseImpuesto, obligatorio en v4.4 si hay <Impuesto>
+        java.util.Map<String, BigDecimal> desgloseImpuestos = new java.util.LinkedHashMap<>();
+        for (SaleItem item : sale.getItems()) {
+             BigDecimal imp = item.getItemTax() != null ? item.getItemTax() : BigDecimal.ZERO;
+             if (imp.compareTo(BigDecimal.ZERO) > 0) {
+                 String codigo = "01";
+                 String codigoTarifaIVA = Boolean.TRUE.equals(item.getProduct().getIsAgrochemicalInsufficiency()) ? "02" : "08";
+                 String key = codigo + "|" + codigoTarifaIVA;
+                 desgloseImpuestos.put(key, desgloseImpuestos.getOrDefault(key, BigDecimal.ZERO).add(imp));
+             } else {
+                 // Exento
+                 String key = "01|10";
+                 desgloseImpuestos.put(key, desgloseImpuestos.getOrDefault(key, BigDecimal.ZERO).add(BigDecimal.ZERO));
+             }
+        }
+
+        for (java.util.Map.Entry<String, BigDecimal> entry : desgloseImpuestos.entrySet()) {
+            String[] parts = entry.getKey().split("\\|");
+            xml.append("    <TotalDesgloseImpuesto>\n");
+            xml.append("      <Codigo>").append(parts[0]).append("</Codigo>\n");
+            xml.append("      <CodigoTarifaIVA>").append(parts[1]).append("</CodigoTarifaIVA>\n");
+            xml.append("      <TotalMontoImpuesto>").append(entry.getValue().setScale(5, RoundingMode.HALF_UP).toPlainString()).append("</TotalMontoImpuesto>\n");
+            xml.append("    </TotalDesgloseImpuesto>\n");
+        }
+
         if (_totalImpuestoExacto.compareTo(BigDecimal.ZERO) > 0) {
             xml.append("    <TotalImpuesto>").append(_totalImpuestoExacto.setScale(5, RoundingMode.HALF_UP).toPlainString()).append("</TotalImpuesto>\n");
         }

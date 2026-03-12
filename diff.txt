@@ -1,1331 +1,1291 @@
 diff --git a/frontend/src/pages/pos/POSTerminal.tsx b/frontend/src/pages/pos/POSTerminal.tsx
-index 6c497b64..e234d803 100644
+index c403bdfe..6c497b64 100644
 --- a/frontend/src/pages/pos/POSTerminal.tsx
 +++ b/frontend/src/pages/pos/POSTerminal.tsx
-@@ -1,794 +1,648 @@
--import { useState, useEffect, useRef } from 'react';
-+import { useState, useEffect } from 'react';
+@@ -1,607 +1,794 @@
+-﻿import { useState, useEffect } from 'react';
++import { useState, useEffect, useRef } from 'react';
  import { motion, AnimatePresence } from 'framer-motion';
--import {
--  Search, Barcode, Plus, Minus, CreditCard, Banknote,
--  ShoppingCart, User, Smartphone, X, Wallet, Percent,
--  DollarSign, ChevronDown, Tag, Trash2
--} from 'lucide-react';
-+import { Search, Barcode, Plus, Minus, CreditCard, Banknote, ShoppingCart, User, Smartphone, X, Wallet } from 'lucide-react';
+-import { Search, Barcode, Plus, Minus, CreditCard, Banknote, ShoppingCart, User, Smartphone, X, Wallet } from 'lucide-react';
++import {
++  Search, Barcode, Plus, Minus, CreditCard, Banknote,
++  ShoppingCart, User, Smartphone, X, Wallet, Percent,
++  DollarSign, ChevronDown, Tag, Trash2
++} from 'lucide-react';
  import toast from 'react-hot-toast';
  import { getProducts, createSale, getClients } from '../../services/api';
--import InvoiceModal from '../../components/InvoiceModal';
--
--/* ─── Types ─────────────────────────────────────────────────────────────────── */
--type DiscountType = 'percentage' | 'fixed';
--interface Discount { type: DiscountType; value: number }
--interface CartItem { product: any; qty: number }
--
--/* ─── Inline Discount Panel (compact, no separate component needed) ──────────── */
--function InlineDiscount({
--  subtotal, discount, onChange,
--}: { subtotal: number; discount: Discount | null; onChange: (d: Discount | null) => void }) {
--  const [open, setOpen] = useState(false);
--  const [type, setType] = useState<DiscountType>(discount?.type ?? 'percentage');
--  const [val, setVal] = useState(discount?.value ?? 0);
--  const ref = useRef<HTMLDivElement>(null);
--
--  const amount = type === 'percentage' ? (subtotal * val) / 100 : Math.min(val, subtotal);
--  const maxVal = type === 'percentage' ? 100 : subtotal;
--
--  // Close on outside click
--  useEffect(() => {
--    const handler = (e: MouseEvent) => {
--      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
--    };
--    document.addEventListener('mousedown', handler);
--    return () => document.removeEventListener('mousedown', handler);
--  }, []);
--
--  const apply = (t: DiscountType, v: number) => {
--    const clamped = Math.max(0, Math.min(v, t === 'percentage' ? 100 : subtotal));
--    setType(t); setVal(clamped);
--    onChange({ type: t, value: clamped });
--  };
--
--  const clear = () => { setVal(0); onChange(null); setOpen(false); };
--
--  return (
--    <div ref={ref} className="relative">
--      <button
--        onClick={() => setOpen(o => !o)}
--        className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl border text-sm font-bold transition-all ${
--          discount
--            ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400'
--            : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700'
--        }`}
--      >
--        <span className="flex items-center gap-2">
--          <Tag size={14} />
--          {discount
--            ? `Desc. ${discount.type === 'percentage' ? `${discount.value}%` : `₡${discount.value.toLocaleString()}`} (−₡${amount.toLocaleString(undefined, { maximumFractionDigits: 0 })})`
--            : 'Agregar Descuento'}
--        </span>
--        <span className="flex items-center gap-1">
--          {discount && (
--            <X
--              size={12}
--              onClick={(e) => { e.stopPropagation(); clear(); }}
--              className="hover:text-red-500 mr-1"
--            />
--          )}
--          <ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
--        </span>
--      </button>
--
--      <AnimatePresence>
--        {open && (
--          <motion.div
--            initial={{ opacity: 0, y: -8, scale: 0.97 }}
--            animate={{ opacity: 1, y: 0, scale: 1 }}
--            exit={{ opacity: 0, y: -8, scale: 0.97 }}
--            className="absolute bottom-full left-0 right-0 mb-2 z-50 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl p-4 space-y-3"
--          >
--            {/* Type tabs */}
--            <div className="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1 gap-1">
--              {(['percentage', 'fixed'] as DiscountType[]).map(t => (
--                <button
--                  key={t}
--                  onClick={() => apply(t, 0)}
--                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-black transition-all ${
--                    type === t ? 'bg-white dark:bg-slate-700 shadow text-slate-900 dark:text-white' : 'text-slate-400 hover:text-slate-600'
--                  }`}
--                >
--                  {t === 'percentage' ? <><Percent size={12} /> Porcentaje</> : <><DollarSign size={12} /> Monto Fijo</>}
--                </button>
--              ))}
--            </div>
-+import DiscountManager from '../../components/DiscountManager';
++import InvoiceModal from '../../components/InvoiceModal';
++
++/* ─── Types ─────────────────────────────────────────────────────────────────── */
++type DiscountType = 'percentage' | 'fixed';
++interface Discount { type: DiscountType; value: number }
++interface CartItem { product: any; qty: number }
++
++/* ─── Inline Discount Panel (compact, no separate component needed) ──────────── */
++function InlineDiscount({
++  subtotal, discount, onChange,
++}: { subtotal: number; discount: Discount | null; onChange: (d: Discount | null) => void }) {
++  const [open, setOpen] = useState(false);
++  const [type, setType] = useState<DiscountType>(discount?.type ?? 'percentage');
++  const [val, setVal] = useState(discount?.value ?? 0);
++  const ref = useRef<HTMLDivElement>(null);
++
++  const amount = type === 'percentage' ? (subtotal * val) / 100 : Math.min(val, subtotal);
++  const maxVal = type === 'percentage' ? 100 : subtotal;
++
++  // Close on outside click
++  useEffect(() => {
++    const handler = (e: MouseEvent) => {
++      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
++    };
++    document.addEventListener('mousedown', handler);
++    return () => document.removeEventListener('mousedown', handler);
++  }, []);
++
++  const apply = (t: DiscountType, v: number) => {
++    const clamped = Math.max(0, Math.min(v, t === 'percentage' ? 100 : subtotal));
++    setType(t); setVal(clamped);
++    onChange({ type: t, value: clamped });
++  };
++
++  const clear = () => { setVal(0); onChange(null); setOpen(false); };
++
++  return (
++    <div ref={ref} className="relative">
++      <button
++        onClick={() => setOpen(o => !o)}
++        className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl border text-sm font-bold transition-all ${
++          discount
++            ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400'
++            : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700'
++        }`}
++      >
++        <span className="flex items-center gap-2">
++          <Tag size={14} />
++          {discount
++            ? `Desc. ${discount.type === 'percentage' ? `${discount.value}%` : `₡${discount.value.toLocaleString()}`} (−₡${amount.toLocaleString(undefined, { maximumFractionDigits: 0 })})`
++            : 'Agregar Descuento'}
++        </span>
++        <span className="flex items-center gap-1">
++          {discount && (
++            <X
++              size={12}
++              onClick={(e) => { e.stopPropagation(); clear(); }}
++              className="hover:text-red-500 mr-1"
++            />
++          )}
++          <ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
++        </span>
++      </button>
++
++      <AnimatePresence>
++        {open && (
++          <motion.div
++            initial={{ opacity: 0, y: -8, scale: 0.97 }}
++            animate={{ opacity: 1, y: 0, scale: 1 }}
++            exit={{ opacity: 0, y: -8, scale: 0.97 }}
++            className="absolute bottom-full left-0 right-0 mb-2 z-50 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl p-4 space-y-3"
++          >
++            {/* Type tabs */}
++            <div className="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1 gap-1">
++              {(['percentage', 'fixed'] as DiscountType[]).map(t => (
++                <button
++                  key={t}
++                  onClick={() => apply(t, 0)}
++                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-black transition-all ${
++                    type === t ? 'bg-white dark:bg-slate-700 shadow text-slate-900 dark:text-white' : 'text-slate-400 hover:text-slate-600'
++                  }`}
++                >
++                  {t === 'percentage' ? <><Percent size={12} /> Porcentaje</> : <><DollarSign size={12} /> Monto Fijo</>}
++                </button>
++              ))}
++            </div>
++
++            {/* Quick presets */}
++            {type === 'percentage' && (
++              <div className="grid grid-cols-4 gap-1.5">
++                {[5, 10, 15, 20].map(pct => (
++                  <button
++                    key={pct}
++                    onClick={() => apply('percentage', pct)}
++                    className={`py-1.5 rounded-lg text-xs font-black transition-all ${
++                      val === pct ? 'bg-premium-emerald text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
++                    }`}
++                  >
++                    {pct}%
++                  </button>
++                ))}
++              </div>
++            )}
++
++            {/* Input row */}
++            <div className="flex items-center gap-2">
++              <button
++                onClick={() => apply(type, val - (type === 'percentage' ? 5 : 1000))}
++                className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 transition-colors"
++              ><Minus size={14} /></button>
++              <input
++                type="number" min={0} max={maxVal} value={val || ''}
++                placeholder="0"
++                onChange={e => apply(type, parseFloat(e.target.value) || 0)}
++                className="flex-1 text-center font-black text-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl py-2 outline-none focus:ring-2 focus:ring-premium-emerald/30 text-slate-900 dark:text-white"
++              />
++              <button
++                onClick={() => apply(type, val + (type === 'percentage' ? 5 : 1000))}
++                className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 transition-colors"
++              ><Plus size={14} /></button>
++            </div>
  
--            {/* Quick presets */}
--            {type === 'percentage' && (
--              <div className="grid grid-cols-4 gap-1.5">
--                {[5, 10, 15, 20].map(pct => (
--                  <button
--                    key={pct}
--                    onClick={() => apply('percentage', pct)}
--                    className={`py-1.5 rounded-lg text-xs font-black transition-all ${
--                      val === pct ? 'bg-premium-emerald text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
--                    }`}
--                  >
--                    {pct}%
--                  </button>
--                ))}
--              </div>
--            )}
--
--            {/* Input row */}
--            <div className="flex items-center gap-2">
--              <button
--                onClick={() => apply(type, val - (type === 'percentage' ? 5 : 1000))}
--                className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 transition-colors"
--              ><Minus size={14} /></button>
--              <input
--                type="number" min={0} max={maxVal} value={val || ''}
--                placeholder="0"
--                onChange={e => apply(type, parseFloat(e.target.value) || 0)}
--                className="flex-1 text-center font-black text-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl py-2 outline-none focus:ring-2 focus:ring-premium-emerald/30 text-slate-900 dark:text-white"
--              />
--              <button
--                onClick={() => apply(type, val + (type === 'percentage' ? 5 : 1000))}
--                className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 transition-colors"
--              ><Plus size={14} /></button>
--            </div>
--
--            {/* Preview & Apply */}
--            <div className="flex items-center justify-between bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 rounded-xl">
--              <span className="text-xs font-bold text-emerald-600">Descuento: −₡{amount.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
--              <button
--                onClick={() => setOpen(false)}
--                className="text-xs font-black bg-premium-emerald text-white px-3 py-1 rounded-lg"
--              >Aplicar</button>
--            </div>
--          </motion.div>
--        )}
--      </AnimatePresence>
--    </div>
--  );
--}
--
--/* ─── Main Component ────────────────────────────────────────────────────────── */
++            {/* Preview & Apply */}
++            <div className="flex items-center justify-between bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 rounded-xl">
++              <span className="text-xs font-bold text-emerald-600">Descuento: −₡{amount.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
++              <button
++                onClick={() => setOpen(false)}
++                className="text-xs font-black bg-premium-emerald text-white px-3 py-1 rounded-lg"
++              >Aplicar</button>
++            </div>
++          </motion.div>
++        )}
++      </AnimatePresence>
++    </div>
++  );
++}
++
++/* ─── Main Component ────────────────────────────────────────────────────────── */
  export default function POSTerminal() {
--  const [cart, setCart] = useState<CartItem[]>([]);
-+  const [cart, setCart] = useState<any[]>([]);
+-  const [cart, setCart] = useState<any[]>([]);
++  const [cart, setCart] = useState<CartItem[]>([]);
    const [searchTerm, setSearchTerm] = useState('');
    const [products, setProducts] = useState<any[]>([]);
    const [clients, setClients] = useState<any[]>([]);
    const [selectedClientId, setSelectedClientId] = useState('');
    const [isProcessing, setIsProcessing] = useState(false);
-+  const [isCredit, setIsCredit] = useState(false);
+-  const [isCredit, setIsCredit] = useState(false);
    const [isCashModalOpen, setIsCashModalOpen] = useState(false);
    const [cashAmount, setCashAmount] = useState('');
--  const [discount, setDiscount] = useState<Discount | null>(null);
--  const [isClientPickerOpen, setIsClientPickerOpen] = useState(false);
--  const [clientSearchTerm, setClientSearchTerm] = useState('');
--  const [showPaymentMethods, setShowPaymentMethods] = useState(false);
--  const [isCredit, setIsCredit] = useState(false);
--  // Invoice modal state
--  const [invoiceData, setInvoiceData] = useState<{ sale: any; cart: any[]; client?: any; change?: number } | null>(null);
-+  const [discount, setDiscount] = useState<{ type: 'percentage' | 'fixed', value: number } | null>(null);
-+  const [isDiscountModalOpen, setIsDiscountModalOpen] = useState(false);
-+  const [tempDiscount, setTempDiscount] = useState<{ type: 'percentage' | 'fixed', value: number } | null>(null);
++  const [discount, setDiscount] = useState<Discount | null>(null);
++  const [isClientPickerOpen, setIsClientPickerOpen] = useState(false);
++  const [clientSearchTerm, setClientSearchTerm] = useState('');
++  const [showPaymentMethods, setShowPaymentMethods] = useState(false);
++  const [isCredit, setIsCredit] = useState(false);
++  // Invoice modal state
++  const [invoiceData, setInvoiceData] = useState<{ sale: any; cart: any[]; client?: any; change?: number } | null>(null);
  
    useEffect(() => {
--    const load = async () => {
-+    const loadData = async () => {
+-    const loadData = async () => {
++    const load = async () => {
        try {
          const prodData = await getProducts();
          setProducts(prodData);
--      } catch (e) { console.error('Error loading products', e); }
--      try {
--        const clientData = await getClients();
--        setClients(clientData);
--      } catch (e) { console.error('Error loading clients', e); }
-+        
-+        try {
-+            const clientData = await getClients();
-+            setClients(clientData);
-+        } catch (e) {
-+            console.error("Could not load clients", e);
-+        }
-+      } catch (error) {
-+        console.error("Error loading products for POS", error);
-+      }
+-        
+-        try {
+-            const clientData = await getClients();
+-            setClients(clientData);
+-        } catch (e) {
+-            console.error("Could not load clients", e);
+-        }
+-      } catch (error) {
+-        console.error("Error loading products for POS", error);
+-      }
++      } catch (e) { console.error('Error loading products', e); }
++      try {
++        const clientData = await getClients();
++        setClients(clientData);
++      } catch (e) { console.error('Error loading clients', e); }
      };
--    load();
-+    loadData();
+-    loadData();
++    load();
    }, []);
  
--  /* Cart ops */
++  /* Cart ops */
    const addToCart = (product: any) => {
      setCart(prev => {
--      const ex = prev.find(i => i.product.id === product.id);
--      if (ex) {
--        if (ex.qty >= product.stockQuantity) { toast.error('Sin stock suficiente'); return prev; }
--        return prev.map(i => i.product.id === product.id ? { ...i, qty: i.qty + 1 } : i);
-+      const existing = prev.find(item => item.product.id === product.id);
-+      if (existing) {
-+        if (existing.qty >= product.stockQuantity) return prev;
-+        return prev.map(item => item.product.id === product.id ? { ...item, qty: item.qty + 1 } : item);
+-      const existing = prev.find(item => item.product.id === product.id);
+-      if (existing) {
+-        if (existing.qty >= product.stockQuantity) return prev;
+-        return prev.map(item => item.product.id === product.id ? { ...item, qty: item.qty + 1 } : item);
++      const ex = prev.find(i => i.product.id === product.id);
++      if (ex) {
++        if (ex.qty >= product.stockQuantity) { toast.error('Sin stock suficiente'); return prev; }
++        return prev.map(i => i.product.id === product.id ? { ...i, qty: i.qty + 1 } : i);
        }
--      if (product.stockQuantity <= 0) { toast.error('Sin stock disponible'); return prev; }
-+      if (product.stockQuantity <= 0) return prev;
+-      if (product.stockQuantity <= 0) return prev;
++      if (product.stockQuantity <= 0) { toast.error('Sin stock disponible'); return prev; }
        return [...prev, { product, qty: 1 }];
      });
    };
--  const removeFromCart = (id: number) => setCart(prev => prev.filter(i => i.product.id !== id));
-+
-+  const removeFromCart = (id: number) => {
-+    setCart(prev => prev.filter(item => item.product.id !== id));
-+  };
-+  
+-
+-  const removeFromCart = (id: number) => {
+-    setCart(prev => prev.filter(item => item.product.id !== id));
+-  };
+-  
++  const removeFromCart = (id: number) => setCart(prev => prev.filter(i => i.product.id !== id));
    const updateQty = (id: number, delta: number) => {
      setCart(prev => prev.map(item => {
--      if (item.product.id !== id) return item;
--      const newQty = Math.max(1, Math.min(item.qty + delta, item.product.stockQuantity));
--      return { ...item, qty: newQty };
-+      if (item.product.id === id) {
-+        const newQty = Math.max(1, Math.min(item.qty + delta, item.product.stockQuantity));
-+        return { ...item, qty: newQty };
-+      }
-+      return item;
+-      if (item.product.id === id) {
+-        const newQty = Math.max(1, Math.min(item.qty + delta, item.product.stockQuantity));
+-        return { ...item, qty: newQty };
+-      }
+-      return item;
++      if (item.product.id !== id) return item;
++      const newQty = Math.max(1, Math.min(item.qty + delta, item.product.stockQuantity));
++      return { ...item, qty: newQty };
      }));
    };
--  const clearCart = () => { setCart([]); setDiscount(null); setSelectedClientId(''); setIsCredit(false); setShowPaymentMethods(false); };
- 
--  /* Totals */
--  const subtotal = cart.reduce((acc, i) => acc + i.product.salePrice * i.qty, 0);
--  const discountAmount = !discount ? 0 : discount.type === 'percentage'
--    ? (subtotal * discount.value) / 100
--    : Math.min(discount.value, subtotal);
--  const subtotalAfterDiscount = subtotal - discountAmount;
--  const tax = cart.reduce((acc, i) => {
--    // Usar el taxRate guardado en el producto (0%, 1%, 4%, 13%, etc.)
--    const rate = (i.product.taxRate ?? 13) / 100;
--    return acc + (i.product.salePrice * i.qty * rate);
-+  const calculateSubtotal = () => cart.reduce((acc, item) => acc + (item.product.salePrice * item.qty), 0);
-+  const calculateTax = () => cart.reduce((acc, item) => {
-+    const rate = item.product.isAgrochemicalInsufficiency ? 0.01 : 0.13;
-+    return acc + (item.product.salePrice * item.qty * rate);
-   }, 0);
+-
+-  const calculateSubtotal = () => cart.reduce((acc, item) => acc + (item.product.salePrice * item.qty), 0);
+-  const calculateTax = () => cart.reduce((acc, item) => {
+-    const rate = item.product.isAgrochemicalInsufficiency ? 0.01 : 0.13;
+-    return acc + (item.product.salePrice * item.qty * rate);
++  const clearCart = () => { setCart([]); setDiscount(null); setSelectedClientId(''); setIsCredit(false); setShowPaymentMethods(false); };
 +
-+  const subtotal = calculateSubtotal();
-+  const calculateDiscountAmount = () => {
-+    if (!discount) return 0;
-+    if (discount.type === 'percentage') {
-+      return (subtotal * discount.value) / 100;
-+    }
-+    return Math.min(discount.value, subtotal);
-+  };
-+  
-+  const discountAmount = calculateDiscountAmount();
++  /* Totals */
++  const subtotal = cart.reduce((acc, i) => acc + i.product.salePrice * i.qty, 0);
++  const discountAmount = !discount ? 0 : discount.type === 'percentage'
++    ? (subtotal * discount.value) / 100
++    : Math.min(discount.value, subtotal);
 +  const subtotalAfterDiscount = subtotal - discountAmount;
-+  const tax = calculateTax();
-   const total = subtotalAfterDiscount + tax;
++  const tax = cart.reduce((acc, i) => {
++    // Usar el taxRate guardado en el producto (0%, 1%, 4%, 13%, etc.)
++    const rate = (i.product.taxRate ?? 13) / 100;
++    return acc + (i.product.salePrice * i.qty * rate);
+   }, 0);
++  const total = subtotalAfterDiscount + tax;
  
--  /* Helpers */
--  const filteredProducts = products.filter(p =>
--    p.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
--    p.cabysCode?.includes(searchTerm) ||
--    p.internalCode?.toLowerCase().includes(searchTerm.toLowerCase())
--  );
--  const filteredClients = clients.filter(c =>
--    c.name?.toLowerCase().includes(clientSearchTerm.toLowerCase()) ||
--    c.identification?.includes(clientSearchTerm)
--  );
--  const selectedClient = clients.find(c => c.id.toString() === selectedClientId);
-+  const handleCashPayment = async () => {
-+    const paidAmount = parseFloat(cashAmount);
-+    
-+    if (isNaN(paidAmount) || paidAmount <= 0) {
-+      toast.error('Por favor ingresa un monto válido.');
-+      return;
-+    }
-+    
-+    if (paidAmount < total) {
-+      toast.error(`El monto es insuficiente. Faltan ₡${(total - paidAmount).toLocaleString(undefined, { maximumFractionDigits: 2 })}`);
-+      return;
-+    }
- 
--  /* Sale submission */
--  const submitSale = async (paymentMethod: string) => {
-+    const change = paidAmount - total;
-+
-+    // Process the sale
-     setIsProcessing(true);
-     try {
-       const saleData = {
--        paymentMethod,
--        subtotal,
--        discountAmount,
-+        paymentMethod: "CASH",
-+        subtotal: subtotal,
-+        discountAmount: discountAmount,
-         discountType: discount?.type || null,
-         discountValue: discount?.value || null,
--        tax,
--        total,
-+        tax: tax,
-+        total: total,
-         clientId: selectedClientId ? parseInt(selectedClientId) : null,
--        items: cart.map(i => ({ productId: i.product.id, qty: i.qty })),
-+        items: cart.map(item => ({
-+          productId: item.product.id,
-+          qty: item.qty
-+        }))
-       };
-+      
-       const response = await createSale(saleData);
--      toast.success('¡Venta completada con éxito!');
--      // Mostrar modal moderno en vez de window.confirm
--      setInvoiceData({ sale: response, cart: [...cart], client: selectedClient });
--      clearCart();
-+      
-+      toast.success(`¡Venta completada! Vuelto: ₡${change.toLocaleString(undefined, { maximumFractionDigits: 2 })}`);
-+      
-+      const selectedClient = clients.find(c => c.id.toString() === selectedClientId);
-+      if (window.confirm(`Venta procesada con éxito.\nVuelto a entregar: ₡${change.toLocaleString()}\n\n¿Deseas generar la factura en PDF?`)) {
-+          import('../../utils/pdfGenerator').then(({ generateInvoicePDF }) => {
-+              generateInvoicePDF(response, cart, selectedClient);
-+          }).catch(err => {
-+              console.error("PDF Gen error:", err);
-+              toast.error("Error al generar el PDF de la factura");
-+          });
-+      }
-+      
-+      // Reset state
-+      setCart([]);
-+      setDiscount(null);
-+      setCashAmount('');
-+      setTimeout(() => setIsCashModalOpen(false), 500);
-+      
-+      // Reload products
-       const data = await getProducts();
-       setProducts(data);
--    } catch {
--      toast.error('Error al procesar la venta.');
-+    } catch (error) {
-+       console.error("Sale error", error);
-+       toast.error("Ocurrió un error al procesar la venta.");
-     } finally {
--      setIsProcessing(false);
-+       setIsProcessing(false);
-     }
-   };
- 
--  const handleCheckout = (paymentMethod: string) => {
-+  const handleCheckout = async (paymentMethod: string) => {
-     if (cart.length === 0) return;
--    if (paymentMethod === 'CASH') { setIsCashModalOpen(true); return; }
--    submitSale(paymentMethod);
--  };
- 
+-  const subtotal = calculateSubtotal();
+-  const tax = calculateTax();
+-  const total = subtotal + tax;
+-
 -  const handleCashPayment = async () => {
--    const paid = parseFloat(cashAmount);
--    if (isNaN(paid) || paid <= 0) { toast.error('Monto inválido'); return; }
--    if (paid < total) { toast.error(`Faltan ₡${(total - paid).toLocaleString(undefined, { maximumFractionDigits: 0 })}`); return; }
--    const change = paid - total;
-+    if (paymentMethod === "CASH") {
-+      setIsCashModalOpen(true);
-+      return;
-+    }
-+
-     setIsProcessing(true);
-     try {
-       const saleData = {
--        paymentMethod: 'CASH', subtotal, discountAmount,
--        discountType: discount?.type || null, discountValue: discount?.value || null,
--        tax, total, clientId: selectedClientId ? parseInt(selectedClientId) : null,
--        items: cart.map(i => ({ productId: i.product.id, qty: i.qty })),
-+        paymentMethod: paymentMethod,
-+        subtotal: subtotal,
-+        discountAmount: discountAmount,
-+        discountType: discount?.type || null,
-+        discountValue: discount?.value || null,
-+        tax: tax,
-+        total: total,
-+        clientId: selectedClientId ? parseInt(selectedClientId) : null,
-+        items: cart.map(item => ({
-+          productId: item.product.id,
-+          qty: item.qty
-+        }))
-       };
-+      
-       const response = await createSale(saleData);
--      toast.success(`¡Venta completada! Vuelto: ₡${change.toLocaleString(undefined, { maximumFractionDigits: 0 })}`);
--      // Mostrar modal moderno en vez de window.confirm
--      setInvoiceData({ sale: response, cart: [...cart], client: selectedClient, change });
--      clearCart(); setCashAmount(''); setIsCashModalOpen(false);
--      const data = await getProducts(); setProducts(data);
--    } catch {
--      toast.error('Error al procesar la venta.');
-+      toast.success("¡Venta completada con éxito!");
-+      
-+      const selectedClient = clients.find(c => c.id.toString() === selectedClientId);
-+      if (window.confirm('Venta procesada con éxito.\n¿Deseas generar la factura en PDF?')) {
-+          import('../../utils/pdfGenerator').then(({ generateInvoicePDF }) => {
-+              generateInvoicePDF(response, cart, selectedClient);
-+          }).catch(err => {
-+              console.error("PDF Gen error:", err);
-+              toast.error("Error al generar el PDF de la factura");
-+          });
-+      }
-+
-+      setCart([]);
-+      setDiscount(null);
-+      
-+      const data = await getProducts();
-+      setProducts(data);
-+    } catch (error) {
-+       console.error("Sale error", error);
-+       toast.error("Ocurrió un error al procesar la venta.");
-     } finally {
--      setIsProcessing(false);
-+       setIsProcessing(false);
-     }
-   };
- 
--  /* ─── Render ──────────────────────────────────────────────────────────────── */
--  return (
--    <>
--      {/* ── Root: two fixed columns filling the page ── */}
--      <div className="flex gap-6 h-full" style={{ minHeight: 0 }}>
-+  const [showPaymentMethods, setShowPaymentMethods] = useState(false);
-+  const [clientSearchTerm, setClientSearchTerm] = useState('');
-+  const [isClientPickerOpen, setIsClientPickerOpen] = useState(false);
- 
--        {/* ════════════════════════════════════════════════
--            LEFT COLUMN — Product Search & Catalog
--            ════════════════════════════════════════════════ */}
--        <div className="flex-1 flex flex-col gap-4 min-h-0">
-+  const filteredProducts = products.filter(p => 
-+    p.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-+    p.cabysCode?.includes(searchTerm) || 
+-    const paidAmount = parseFloat(cashAmount);
+-    
+-    if (isNaN(paidAmount) || paidAmount <= 0) {
+-      toast.error('Por favor ingresa un monto válido.');
+-      return;
+-    }
+-    
+-    if (paidAmount < total) {
+-      toast.error(`El monto es insuficiente. Faltan ₡${(total - paidAmount).toLocaleString(undefined, { maximumFractionDigits: 2 })}`);
+-      return;
+-    }
+-
+-    const change = paidAmount - total;
++  /* Helpers */
++  const filteredProducts = products.filter(p =>
++    p.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
++    p.cabysCode?.includes(searchTerm) ||
 +    p.internalCode?.toLowerCase().includes(searchTerm.toLowerCase())
 +  );
-+
-+  const filteredClients = clients.filter(c => 
++  const filteredClients = clients.filter(c =>
 +    c.name?.toLowerCase().includes(clientSearchTerm.toLowerCase()) ||
 +    c.identification?.includes(clientSearchTerm)
 +  );
- 
--          {/* Search Bar */}
--          <div className="premium-panel px-4 py-3 flex gap-3 items-center shrink-0">
 +  const selectedClient = clients.find(c => c.id.toString() === selectedClientId);
-+
+ 
+-    // Process the sale
++  /* Sale submission */
++  const submitSale = async (paymentMethod: string) => {
+     setIsProcessing(true);
+     try {
+       const saleData = {
+-        paymentMethod: "CASH",
+-        subtotal: subtotal,
+-        tax: tax,
+-        total: total,
++        paymentMethod,
++        subtotal,
++        discountAmount,
++        discountType: discount?.type || null,
++        discountValue: discount?.value || null,
++        tax,
++        total,
+         clientId: selectedClientId ? parseInt(selectedClientId) : null,
+-        items: cart.map(item => ({
+-          productId: item.product.id,
+-          qty: item.qty
+-        }))
++        items: cart.map(i => ({ productId: i.product.id, qty: i.qty })),
+       };
+-      
+       const response = await createSale(saleData);
+-      
+-      toast.success(`¡Venta completada! Vuelto: ₡${change.toLocaleString(undefined, { maximumFractionDigits: 2 })}`);
+-      
+-      const selectedClient = clients.find(c => c.id.toString() === selectedClientId);
+-      if (window.confirm(`Venta procesada con éxito.\nVuelto a entregar: ₡${change.toLocaleString()}\n\n¿Deseas generar la factura en PDF?`)) {
+-          import('../../utils/pdfGenerator').then(({ generateInvoicePDF }) => {
+-              generateInvoicePDF(response, cart, selectedClient);
+-          }).catch(err => {
+-              console.error("PDF Gen error:", err);
+-              toast.error("Error al generar el PDF de la factura");
+-          });
+-      }
+-      
+-      // Reset state
+-      setCart([]);
+-      setCashAmount('');
+-      setTimeout(() => setIsCashModalOpen(false), 500);
+-      
+-      // Reload products
++      toast.success('¡Venta completada con éxito!');
++      // Mostrar modal moderno en vez de window.confirm
++      setInvoiceData({ sale: response, cart: [...cart], client: selectedClient });
++      clearCart();
+       const data = await getProducts();
+       setProducts(data);
+-    } catch (error) {
+-       console.error("Sale error", error);
+-       toast.error("Ocurrió un error al procesar la venta.");
++    } catch {
++      toast.error('Error al procesar la venta.');
+     } finally {
+-       setIsProcessing(false);
++      setIsProcessing(false);
+     }
+   };
+ 
+-  const handleCheckout = async (paymentMethod: string) => {
++  const handleCheckout = (paymentMethod: string) => {
+     if (cart.length === 0) return;
++    if (paymentMethod === 'CASH') { setIsCashModalOpen(true); return; }
++    submitSale(paymentMethod);
++  };
+ 
+-    if (paymentMethod === "CASH") {
+-      setIsCashModalOpen(true);
+-      return;
+-    }
+-
++  const handleCashPayment = async () => {
++    const paid = parseFloat(cashAmount);
++    if (isNaN(paid) || paid <= 0) { toast.error('Monto inválido'); return; }
++    if (paid < total) { toast.error(`Faltan ₡${(total - paid).toLocaleString(undefined, { maximumFractionDigits: 0 })}`); return; }
++    const change = paid - total;
+     setIsProcessing(true);
+     try {
+       const saleData = {
+-        paymentMethod: paymentMethod,
+-        subtotal: subtotal,
+-        tax: tax,
+-        total: total,
+-        clientId: selectedClientId ? parseInt(selectedClientId) : null,
+-        items: cart.map(item => ({
+-          productId: item.product.id,
+-          qty: item.qty
+-        }))
++        paymentMethod: 'CASH', subtotal, discountAmount,
++        discountType: discount?.type || null, discountValue: discount?.value || null,
++        tax, total, clientId: selectedClientId ? parseInt(selectedClientId) : null,
++        items: cart.map(i => ({ productId: i.product.id, qty: i.qty })),
+       };
+-      
+       const response = await createSale(saleData);
+-      toast.success("¡Venta completada con éxito!");
+-      
+-      const selectedClient = clients.find(c => c.id.toString() === selectedClientId);
+-      if (window.confirm('Venta procesada con éxito.\n¿Deseas generar la factura en PDF?')) {
+-          import('../../utils/pdfGenerator').then(({ generateInvoicePDF }) => {
+-              generateInvoicePDF(response, cart, selectedClient);
+-          }).catch(err => {
+-              console.error("PDF Gen error:", err);
+-              toast.error("Error al generar el PDF de la factura");
+-          });
+-      }
+-
+-      setCart([]);
+-      
+-      const data = await getProducts();
+-      setProducts(data);
+-    } catch (error) {
+-       console.error("Sale error", error);
+-       toast.error("Ocurrió un error al procesar la venta.");
++      toast.success(`¡Venta completada! Vuelto: ₡${change.toLocaleString(undefined, { maximumFractionDigits: 0 })}`);
++      // Mostrar modal moderno en vez de window.confirm
++      setInvoiceData({ sale: response, cart: [...cart], client: selectedClient, change });
++      clearCart(); setCashAmount(''); setIsCashModalOpen(false);
++      const data = await getProducts(); setProducts(data);
++    } catch {
++      toast.error('Error al procesar la venta.');
+     } finally {
+-       setIsProcessing(false);
++      setIsProcessing(false);
+     }
+   };
+ 
+-  const [showPaymentMethods, setShowPaymentMethods] = useState(false);
+-  const [clientSearchTerm, setClientSearchTerm] = useState('');
+-  const [isClientPickerOpen, setIsClientPickerOpen] = useState(false);
+-
+-  const filteredProducts = products.filter(p => 
+-    p.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+-    p.cabysCode?.includes(searchTerm) || 
+-    p.internalCode?.toLowerCase().includes(searchTerm.toLowerCase())
+-  );
+-
+-  const filteredClients = clients.filter(c => 
+-    c.name?.toLowerCase().includes(clientSearchTerm.toLowerCase()) ||
+-    c.identification?.includes(clientSearchTerm)
+-  );
++  /* ─── Render ──────────────────────────────────────────────────────────────── */
 +  return (
-+    <div className="flex flex-col lg:flex-row h-full gap-8">
-+      {/* Panel principal scrollable */}
-+      <div className="flex-1 flex flex-col gap-6 overflow-y-auto custom-scrollbar" style={{ maxHeight: '100vh' }}>
-+      
-+      {/* Zona Izquierda: Buscador y Grilla Virtual */}
-+      <div className="flex-1 flex flex-col gap-6">
-+        <div className="premium-panel p-2 flex gap-2 items-center">
++    <>
++      {/* ── Root: two fixed columns filling the page ── */}
++      <div className="flex gap-6 h-full" style={{ minHeight: 0 }}>
+ 
+-  const selectedClient = clients.find(c => c.id.toString() === selectedClientId);
++        {/* ════════════════════════════════════════════════
++            LEFT COLUMN — Product Search & Catalog
++            ════════════════════════════════════════════════ */}
++        <div className="flex-1 flex flex-col gap-4 min-h-0">
+ 
+-  return (
+-    <div className="flex flex-col lg:flex-row h-full gap-8">
+-      
+-      {/* Zona Izquierda: Buscador y Grilla Virtual */}
+-      <div className="flex-1 flex flex-col gap-6">
+-        <div className="premium-panel p-2 flex gap-2 items-center">
++          {/* Search Bar */}
++          <div className="premium-panel px-4 py-3 flex gap-3 items-center shrink-0">
              <div className="relative flex-1">
--              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
--              <input
--                type="text"
--                placeholder="Buscar por nombre, CABYS o código interno..."
--                className="w-full bg-transparent border-none rounded-xl px-12 py-3 focus:ring-0 outline-none text-slate-800 dark:text-white placeholder:text-slate-400 font-medium text-sm"
-+              <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-+              <input 
-+                type="text" 
-+                placeholder="Buscar por Nombre, CABYS o Código Interno..." 
-+                className="w-full bg-transparent border-none rounded-2xl px-14 py-4 focus:ring-0 outline-none text-slate-800 dark:text-white placeholder:text-slate-400 font-medium"
+-              <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+-              <input 
+-                type="text" 
+-                placeholder="Buscar por Nombre, CABYS o Código Interno..." 
+-                className="w-full bg-transparent border-none rounded-2xl px-14 py-4 focus:ring-0 outline-none text-slate-800 dark:text-white placeholder:text-slate-400 font-medium"
++              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
++              <input
++                type="text"
++                placeholder="Buscar por nombre, CABYS o código interno..."
++                className="w-full bg-transparent border-none rounded-xl px-12 py-3 focus:ring-0 outline-none text-slate-800 dark:text-white placeholder:text-slate-400 font-medium text-sm"
                  value={searchTerm}
--                onChange={e => setSearchTerm(e.target.value)}
-+                onChange={(e) => setSearchTerm(e.target.value)}
+-                onChange={(e) => setSearchTerm(e.target.value)}
++                onChange={e => setSearchTerm(e.target.value)}
                />
--              {searchTerm && (
--                <button onClick={() => setSearchTerm('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
--                  <X size={16} />
--                </button>
--              )}
++              {searchTerm && (
++                <button onClick={() => setSearchTerm('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
++                  <X size={16} />
++                </button>
++              )}
              </div>
--            <button className="p-3 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
--              <Barcode className="text-slate-600 dark:text-slate-300" size={20} />
-+            <button className="p-4 bg-slate-100 dark:bg-slate-800 rounded-2xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors mr-1">
-+              <Barcode className="text-slate-600 dark:text-slate-300" size={22} />
+-            <button className="p-4 bg-slate-100 dark:bg-slate-800 rounded-2xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors mr-1">
+-              <Barcode className="text-slate-600 dark:text-slate-300" size={22} />
++            <button className="p-3 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
++              <Barcode className="text-slate-600 dark:text-slate-300" size={20} />
              </button>
--          </div>
-+        </div>
- 
--          {/* Product Grid — scrollable */}
--          <div className="flex-1 premium-panel flex flex-col overflow-hidden min-h-0">
--            <div className="flex items-center justify-between px-5 pt-4 pb-3 shrink-0">
--              <h3 className="font-black text-slate-900 dark:text-white text-base">Catálogo</h3>
--              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">
--                {filteredProducts.length} productos
--              </span>
-+        <div className="flex-1 premium-panel p-6 overflow-hidden flex flex-col">
-+           <div className="flex items-center justify-between mb-6">
-+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Catálogo de Productos</h3>
-+              <span className="text-xs font-bold text-slate-500 uppercase tracking-widest bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">{filteredProducts.length} Ítems</span>
-+           </div>
-+           
-+           <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 pb-4">
-+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-5">
-+                 {filteredProducts.map(prod => (
-+                    <motion.button 
-+                     layout
-+                     initial={{ opacity: 0, scale: 0.9 }}
-+                     animate={{ opacity: 1, scale: 1 }}
-+                     key={prod.id} 
-+                     onClick={() => addToCart(prod)}
-+                     disabled={prod.stockQuantity <= 0}
-+                     className={`flex flex-col text-left premium-card p-5 group ${prod.stockQuantity <= 0 ? 'opacity-40 cursor-not-allowed grayscale' : ''}`}
-+                    >
-+                       <span className="text-[10px] text-slate-400 mb-2 font-bold uppercase tracking-wider">SKU: {prod.internalCode || 'N/A'}</span>
-+                       <span className="font-bold text-slate-800 dark:text-slate-100 mb-4 group-hover:text-premium-emerald transition-colors leading-tight line-clamp-2 h-10">{prod.name}</span>
-+                       
-+                       <div className="mt-auto pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center w-full">
-+                          <span className="text-xl font-black text-slate-900 dark:text-white">₡{prod.salePrice?.toLocaleString()}</span>
-+                          <div className={`p-1.5 rounded-lg ${prod.stockQuantity > 5 ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600' : 'bg-amber-50 dark:bg-amber-900/20 text-amber-600'}`}>
-+                             <p className="text-[10px] font-black">{prod.stockQuantity}</p>
-+                          </div>
-+                       </div>
-+                    </motion.button>
-+                 ))}
-+                 {filteredProducts.length === 0 && (
-+                    <div className="col-span-full flex flex-col items-center justify-center py-20 opacity-40">
-+                       <Search size={48} className="mb-4" />
-+                       <p className="font-bold">No se encontraron productos</p>
-+                    </div>
-+                 )}
-+              </div>
-             </div>
-+         </div>
-+      </div>
-+      </div>
- 
--            <div className="flex-1 overflow-y-auto custom-scrollbar px-4 pb-4 min-h-0">
--              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
--                {filteredProducts.map(prod => (
--                  <motion.button
--                    layout
--                    initial={{ opacity: 0, scale: 0.92 }}
--                    animate={{ opacity: 1, scale: 1 }}
--                    key={prod.id}
--                    onClick={() => addToCart(prod)}
--                    disabled={prod.stockQuantity <= 0}
--                    className={`flex flex-col text-left bg-white dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 rounded-2xl p-4 group transition-all hover:border-premium-emerald/40 hover:shadow-md hover:shadow-premium-emerald/10 hover:-translate-y-0.5 ${
--                      prod.stockQuantity <= 0 ? 'opacity-40 cursor-not-allowed grayscale' : ''
--                    }`}
--                  >
--                    {prod.internalCode && (
--                      <span className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1.5 truncate w-full">
--                        {prod.internalCode}
--                      </span>
--                    )}
--                    <span className="font-bold text-slate-800 dark:text-slate-100 text-sm leading-tight line-clamp-2 mb-3 group-hover:text-premium-emerald transition-colors">
--                      {prod.name}
-+      {/* Zona Derecha: Checkout Sidebar */}
-+      <div className="w-full lg:w-[450px] flex flex-col gap-6 h-full">
-+        <div className="premium-panel flex-1 flex flex-col overflow-y-auto bg-white dark:bg-slate-900/60" style={{ minHeight: '600px', maxHeight: '90vh' }}>
-+          <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col gap-4">
-+             <div className="flex items-center justify-between mb-2">
-+               <h2 className="text-xl font-black text-slate-900 dark:text-white">Resumen de Venta</h2>
-+               <div className="w-10 h-10 emerald-gradient rounded-2xl flex items-center justify-center text-white shadow-lg shadow-premium-emerald/30">
-+                 <ShoppingCart size={20} />
-+               </div>
-+             </div>
-+
-+             <div className="relative space-y-3">
-+               <button 
-+                onClick={() => setIsClientPickerOpen(!isClientPickerOpen)}
-+                className="w-full flex items-center gap-3 bg-slate-100 dark:bg-slate-800 p-2 rounded-2xl border border-black/5 dark:border-white/5 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-left"
-+               >
-+                  <div className="w-9 h-9 bg-white dark:bg-slate-900 rounded-xl flex items-center justify-center shadow-sm shrink-0">
-+                    <User size={18} className={selectedClient ? "text-premium-emerald" : "text-slate-400"} />
-+                  </div>
-+                  <div className="flex flex-col overflow-hidden">
-+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Cliente</span>
-+                    <span className="text-sm font-bold text-slate-800 dark:text-white truncate">
-+                      {selectedClient ? selectedClient.name : "Cliente Genérico (Contado)"}
-                     </span>
--                    <div className="mt-auto pt-3 border-t border-slate-100 dark:border-slate-700/60 flex justify-between items-center w-full">
--                      <span className="text-base font-black text-slate-900 dark:text-white">
--                        ₡{prod.salePrice?.toLocaleString()}
--                      </span>
--                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg ${
--                        prod.stockQuantity > 5
--                          ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600'
--                          : 'bg-amber-50 dark:bg-amber-900/20 text-amber-600'
--                      }`}>
--                        {prod.stockQuantity}
--                      </span>
-+                  </div>
-+                  {selectedClientId && (
-+                    <X 
-+                      size={14} 
-+                      className="ml-auto mr-2 text-slate-400 hover:text-rose-500 transition-colors" 
-+                      onClick={(e) => { e.stopPropagation(); setSelectedClientId(''); setIsCredit(false); }}
-+                    />
-+                  )}
-+               </button>
-+
-+               {/* Toggle Venta a Crédito */}
-+               <div 
-+                  onClick={() => {
-+                    if (!selectedClientId) {
-+                      toast.error("Selecciona un cliente para habilitar crédito");
-+                      return;
-+                    }
-+                    setIsCredit(!isCredit);
-+                  }}
-+                  className={`flex items-center justify-between p-4 rounded-2xl cursor-pointer transition-all border ${isCredit ? 'bg-premium-emerald/5 border-premium-emerald/20 text-premium-emerald' : 'bg-slate-50 dark:bg-slate-800/50 border-transparent text-slate-500'}`}
-+               >
-+                  <div className="flex items-center gap-3">
-+                    <div className={`p-2 rounded-xl ${isCredit ? 'bg-premium-emerald text-white' : 'bg-white dark:bg-slate-900 text-slate-400'}`}>
-+                      <Wallet size={16} />
-                     </div>
--                  </motion.button>
--                ))}
--
--                {filteredProducts.length === 0 && (
--                  <div className="col-span-full flex flex-col items-center justify-center py-24 opacity-30">
--                    <Search size={40} className="mb-3" />
--                    <p className="font-bold text-sm">Sin resultados</p>
-+                    <span className="text-sm font-bold">Venta a Crédito</span>
-                   </div>
--                )}
--              </div>
--            </div>
--          </div>
 -        </div>
--
--        {/* ════════════════════════════════════════════════
--            RIGHT COLUMN — Cart & Checkout
--            ════════════════════════════════════════════════ */}
--        <div className="w-[400px] xl:w-[440px] flex flex-col premium-panel overflow-hidden shrink-0" style={{ minHeight: 0 }}>
--
--          {/* ── Header ── */}
--          <div className="px-5 pt-5 pb-3 border-b border-slate-100 dark:border-slate-800 shrink-0">
--            <div className="flex items-center justify-between mb-3">
--              <div className="flex items-center gap-2">
--                <div className="w-8 h-8 emerald-gradient rounded-xl flex items-center justify-center text-white shadow-md shadow-premium-emerald/30">
--                  <ShoppingCart size={16} />
--                </div>
--                <div>
--                  <h2 className="font-black text-slate-900 dark:text-white text-base leading-tight">Carrito</h2>
--                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{cart.length} ítems</p>
--                </div>
--              </div>
--              {cart.length > 0 && (
--                <button
--                  onClick={clearCart}
--                  className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all"
--                  title="Vaciar carrito"
--                >
--                  <Trash2 size={16} />
--                </button>
--              )}
--            </div>
-+                  <div className={`w-12 h-6 rounded-full relative transition-colors duration-300 ${isCredit ? 'bg-premium-emerald' : 'bg-slate-300 dark:bg-slate-700'}`}>
-+                    <motion.div 
-+                      animate={{ x: isCredit ? 24 : 4 }}
-+                      className="absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm"
-+                    />
-+                  </div>
-+               </div>
++          </div>
  
--            {/* Client Selector */}
--            <div className="relative">
--              <button
--                onClick={() => setIsClientPickerOpen(!isClientPickerOpen)}
--                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border transition-all text-left text-sm ${
--                  selectedClient
--                    ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800'
--                    : 'bg-slate-100 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
--                }`}
--              >
--                <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
--                  selectedClient ? 'bg-premium-emerald text-white' : 'bg-white dark:bg-slate-700 text-slate-400'
--                }`}>
--                  <User size={14} />
--                </div>
--                <div className="flex-1 overflow-hidden">
--                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-0.5">Cliente</p>
--                  <p className={`font-bold truncate text-sm ${selectedClient ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-300'}`}>
--                    {selectedClient ? selectedClient.name : 'Consumidor Final'}
--                  </p>
--                </div>
--                {selectedClientId ? (
--                  <X
--                    size={13}
--                    className="text-slate-400 hover:text-red-500 shrink-0"
--                    onClick={e => { e.stopPropagation(); setSelectedClientId(''); setIsCredit(false); }}
--                  />
--                ) : (
--                  <ChevronDown size={14} className={`text-slate-400 shrink-0 transition-transform ${isClientPickerOpen ? 'rotate-180' : ''}`} />
--                )}
--              </button>
+-        <div className="flex-1 premium-panel p-6 overflow-hidden flex flex-col">
+-           <div className="flex items-center justify-between mb-6">
+-              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Catálogo de Productos</h3>
+-              <span className="text-xs font-bold text-slate-500 uppercase tracking-widest bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">{filteredProducts.length} Ítems</span>
+-           </div>
+-           
+-           <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 pb-4">
+-              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-5">
+-                 {filteredProducts.map(prod => (
+-                    <motion.button 
+-                     layout
+-                     initial={{ opacity: 0, scale: 0.9 }}
+-                     animate={{ opacity: 1, scale: 1 }}
+-                     key={prod.id} 
+-                     onClick={() => addToCart(prod)}
+-                     disabled={prod.stockQuantity <= 0}
+-                     className={`flex flex-col text-left premium-card p-5 group ${prod.stockQuantity <= 0 ? 'opacity-40 cursor-not-allowed grayscale' : ''}`}
+-                    >
+-                       <span className="text-[10px] text-slate-400 mb-2 font-bold uppercase tracking-wider">SKU: {prod.internalCode || 'N/A'}</span>
+-                       <span className="font-bold text-slate-800 dark:text-slate-100 mb-4 group-hover:text-premium-emerald transition-colors leading-tight line-clamp-2 h-10">{prod.name}</span>
+-                       
+-                       <div className="mt-auto pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center w-full">
+-                          <span className="text-xl font-black text-slate-900 dark:text-white">₡{prod.salePrice?.toLocaleString()}</span>
+-                          <div className={`p-1.5 rounded-lg ${prod.stockQuantity > 5 ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600' : 'bg-amber-50 dark:bg-amber-900/20 text-amber-600'}`}>
+-                             <p className="text-[10px] font-black">{prod.stockQuantity}</p>
+-                          </div>
+-                       </div>
+-                    </motion.button>
+-                 ))}
+-                 {filteredProducts.length === 0 && (
+-                    <div className="col-span-full flex flex-col items-center justify-center py-20 opacity-40">
+-                       <Search size={48} className="mb-4" />
+-                       <p className="font-bold">No se encontraron productos</p>
++          {/* Product Grid — scrollable */}
++          <div className="flex-1 premium-panel flex flex-col overflow-hidden min-h-0">
++            <div className="flex items-center justify-between px-5 pt-4 pb-3 shrink-0">
++              <h3 className="font-black text-slate-900 dark:text-white text-base">Catálogo</h3>
++              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">
++                {filteredProducts.length} productos
++              </span>
++            </div>
++
++            <div className="flex-1 overflow-y-auto custom-scrollbar px-4 pb-4 min-h-0">
++              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
++                {filteredProducts.map(prod => (
++                  <motion.button
++                    layout
++                    initial={{ opacity: 0, scale: 0.92 }}
++                    animate={{ opacity: 1, scale: 1 }}
++                    key={prod.id}
++                    onClick={() => addToCart(prod)}
++                    disabled={prod.stockQuantity <= 0}
++                    className={`flex flex-col text-left bg-white dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 rounded-2xl p-4 group transition-all hover:border-premium-emerald/40 hover:shadow-md hover:shadow-premium-emerald/10 hover:-translate-y-0.5 ${
++                      prod.stockQuantity <= 0 ? 'opacity-40 cursor-not-allowed grayscale' : ''
++                    }`}
++                  >
++                    {prod.internalCode && (
++                      <span className="text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1.5 truncate w-full">
++                        {prod.internalCode}
++                      </span>
++                    )}
++                    <span className="font-bold text-slate-800 dark:text-slate-100 text-sm leading-tight line-clamp-2 mb-3 group-hover:text-premium-emerald transition-colors">
++                      {prod.name}
++                    </span>
++                    <div className="mt-auto pt-3 border-t border-slate-100 dark:border-slate-700/60 flex justify-between items-center w-full">
++                      <span className="text-base font-black text-slate-900 dark:text-white">
++                        ₡{prod.salePrice?.toLocaleString()}
++                      </span>
++                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg ${
++                        prod.stockQuantity > 5
++                          ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600'
++                          : 'bg-amber-50 dark:bg-amber-900/20 text-amber-600'
++                      }`}>
++                        {prod.stockQuantity}
++                      </span>
+                     </div>
+-                 )}
++                  </motion.button>
++                ))}
++
++                {filteredProducts.length === 0 && (
++                  <div className="col-span-full flex flex-col items-center justify-center py-24 opacity-30">
++                    <Search size={40} className="mb-3" />
++                    <p className="font-bold text-sm">Sin resultados</p>
++                  </div>
++                )}
+               </div>
+-           </div>
++            </div>
++          </div>
+         </div>
+-      </div>
+ 
+-      {/* Zona Derecha: Checkout Sidebar */}
+-      <div className="w-full lg:w-[450px] flex flex-col gap-6 h-full">
+-        <div className="premium-panel flex-1 flex flex-col overflow-hidden bg-white dark:bg-slate-900/60">
+-          <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col gap-4">
+-             <div className="flex items-center justify-between">
+-                <h2 className="text-xl font-black text-slate-900 dark:text-white">Resumen de Venta</h2>
+-                <div className="w-10 h-10 emerald-gradient rounded-2xl flex items-center justify-center text-white shadow-lg shadow-premium-emerald/30">
+-                   <ShoppingCart size={20} />
++        {/* ════════════════════════════════════════════════
++            RIGHT COLUMN — Cart & Checkout
++            ════════════════════════════════════════════════ */}
++        <div className="w-[400px] xl:w-[440px] flex flex-col premium-panel overflow-hidden shrink-0" style={{ minHeight: 0 }}>
++
++          {/* ── Header ── */}
++          <div className="px-5 pt-5 pb-3 border-b border-slate-100 dark:border-slate-800 shrink-0">
++            <div className="flex items-center justify-between mb-3">
++              <div className="flex items-center gap-2">
++                <div className="w-8 h-8 emerald-gradient rounded-xl flex items-center justify-center text-white shadow-md shadow-premium-emerald/30">
++                  <ShoppingCart size={16} />
+                 </div>
+-             </div>
++                <div>
++                  <h2 className="font-black text-slate-900 dark:text-white text-base leading-tight">Carrito</h2>
++                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{cart.length} ítems</p>
++                </div>
++              </div>
++              {cart.length > 0 && (
++                <button
++                  onClick={clearCart}
++                  className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all"
++                  title="Vaciar carrito"
++                >
++                  <Trash2 size={16} />
++                </button>
++              )}
++            </div>
+ 
+-             <div className="relative space-y-3">
+-               <button 
++            {/* Client Selector */}
++            <div className="relative">
++              <button
+                 onClick={() => setIsClientPickerOpen(!isClientPickerOpen)}
+-                className="w-full flex items-center gap-3 bg-slate-100 dark:bg-slate-800 p-2 rounded-2xl border border-black/5 dark:border-white/5 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-left"
+-               >
+-                  <div className="w-9 h-9 bg-white dark:bg-slate-900 rounded-xl flex items-center justify-center shadow-sm shrink-0">
+-                    <User size={18} className={selectedClient ? "text-premium-emerald" : "text-slate-400"} />
+-                  </div>
+-                  <div className="flex flex-col overflow-hidden">
+-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Cliente</span>
+-                    <span className="text-sm font-bold text-slate-800 dark:text-white truncate">
+-                      {selectedClient ? selectedClient.name : "Cliente Genérico (Contado)"}
+-                    </span>
+-                  </div>
+-                  {selectedClientId && (
+-                    <X 
+-                      size={14} 
+-                      className="ml-auto mr-2 text-slate-400 hover:text-rose-500 transition-colors" 
+-                      onClick={(e) => { e.stopPropagation(); setSelectedClientId(''); setIsCredit(false); }}
+-                    />
+-                  )}
+-               </button>
 -
--              <AnimatePresence>
--                {isClientPickerOpen && (
--                  <motion.div
--                    initial={{ opacity: 0, y: 6, scale: 0.97 }}
-+               <AnimatePresence>
-+                 {isClientPickerOpen && (
-+                   <motion.div 
-+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+-               {/* Toggle Venta a Crédito */}
+-               <div 
+-                  onClick={() => {
+-                    if (!selectedClientId) {
+-                      toast.error("Selecciona un cliente para habilitar crédito");
+-                      return;
+-                    }
+-                    setIsCredit(!isCredit);
+-                  }}
+-                  className={`flex items-center justify-between p-4 rounded-2xl cursor-pointer transition-all border ${isCredit ? 'bg-premium-emerald/5 border-premium-emerald/20 text-premium-emerald' : 'bg-slate-50 dark:bg-slate-800/50 border-transparent text-slate-500'}`}
+-               >
+-                  <div className="flex items-center gap-3">
+-                    <div className={`p-2 rounded-xl ${isCredit ? 'bg-premium-emerald text-white' : 'bg-white dark:bg-slate-900 text-slate-400'}`}>
+-                      <Wallet size={16} />
+-                    </div>
+-                    <span className="text-sm font-bold">Venta a Crédito</span>
+-                  </div>
+-                  <div className={`w-12 h-6 rounded-full relative transition-colors duration-300 ${isCredit ? 'bg-premium-emerald' : 'bg-slate-300 dark:bg-slate-700'}`}>
+-                    <motion.div 
+-                      animate={{ x: isCredit ? 24 : 4 }}
+-                      className="absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm"
+-                    />
+-                  </div>
+-               </div>
+-
+-               <AnimatePresence>
+-                 {isClientPickerOpen && (
+-                   <motion.div 
+-                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
++                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border transition-all text-left text-sm ${
++                  selectedClient
++                    ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800'
++                    : 'bg-slate-100 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
++                }`}
++              >
++                <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
++                  selectedClient ? 'bg-premium-emerald text-white' : 'bg-white dark:bg-slate-700 text-slate-400'
++                }`}>
++                  <User size={14} />
++                </div>
++                <div className="flex-1 overflow-hidden">
++                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-0.5">Cliente</p>
++                  <p className={`font-bold truncate text-sm ${selectedClient ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-300'}`}>
++                    {selectedClient ? selectedClient.name : 'Consumidor Final'}
++                  </p>
++                </div>
++                {selectedClientId ? (
++                  <X
++                    size={13}
++                    className="text-slate-400 hover:text-red-500 shrink-0"
++                    onClick={e => { e.stopPropagation(); setSelectedClientId(''); setIsCredit(false); }}
++                  />
++                ) : (
++                  <ChevronDown size={14} className={`text-slate-400 shrink-0 transition-transform ${isClientPickerOpen ? 'rotate-180' : ''}`} />
++                )}
++              </button>
++
++              <AnimatePresence>
++                {isClientPickerOpen && (
++                  <motion.div
++                    initial={{ opacity: 0, y: 6, scale: 0.97 }}
                      animate={{ opacity: 1, y: 0, scale: 1 }}
--                    exit={{ opacity: 0, y: 6, scale: 0.97 }}
--                    className="absolute top-full left-0 right-0 mt-1.5 z-50 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden"
--                  >
--                    <div className="p-2 border-b border-slate-50 dark:border-slate-800">
--                      <div className="relative">
--                        <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
--                        <input
--                          autoFocus
--                          type="text"
--                          placeholder="Buscar cliente..."
--                          className="w-full bg-slate-50 dark:bg-slate-800 rounded-xl pl-8 pr-3 py-2 text-sm font-bold outline-none text-slate-900 dark:text-white"
--                          value={clientSearchTerm}
--                          onChange={e => setClientSearchTerm(e.target.value)}
--                        />
--                      </div>
--                    </div>
--                    <div className="overflow-y-auto max-h-48 custom-scrollbar p-1.5">
--                      <button
--                        onClick={() => { setSelectedClientId(''); setIsClientPickerOpen(false); setIsCredit(false); }}
--                        className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
--                      >
--                        <p className="text-sm font-bold text-slate-800 dark:text-white">Consumidor Final</p>
--                        <p className="text-[10px] text-slate-400 font-bold uppercase">Contado</p>
--                      </button>
--                      {filteredClients.map(c => (
--                        <button
--                          key={c.id}
--                          onClick={() => { setSelectedClientId(c.id.toString()); setIsClientPickerOpen(false); setClientSearchTerm(''); }}
--                          className={`w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors mt-0.5 ${
--                            selectedClientId === c.id.toString() ? 'bg-emerald-50 dark:bg-emerald-900/20' : ''
--                          }`}
-+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
-+                    className="absolute top-full left-0 right-0 mt-2 z-50 bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden flex flex-col max-h-[400px]"
-+                   >
-+                     <div className="p-4 border-b border-slate-50 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50">
-+                        <div className="relative">
-+                          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-+                          <input 
-+                            type="text" 
-+                            autoFocus
-+                            placeholder="Buscar cliente por nombre o ID..."
-+                            className="w-full bg-white dark:bg-slate-800 rounded-xl pl-9 pr-4 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-premium-emerald/20 transition-all text-slate-900 dark:text-white"
-+                            value={clientSearchTerm}
-+                            onChange={(e) => setClientSearchTerm(e.target.value)}
-+                          />
-+                        </div>
-+                     </div>
-+                     <div className="overflow-y-auto custom-scrollbar p-2">
-+                        <button 
-+                          onClick={() => { setSelectedClientId(''); setIsClientPickerOpen(false); setIsCredit(false); }}
-+                          className="w-full p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 text-left transition-colors flex flex-col"
+-                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+-                    className="absolute top-full left-0 right-0 mt-2 z-50 bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden flex flex-col max-h-[400px]"
+-                   >
+-                     <div className="p-4 border-b border-slate-50 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50">
+-                        <div className="relative">
+-                          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+-                          <input 
+-                            type="text" 
+-                            autoFocus
+-                            placeholder="Buscar cliente por nombre o ID..."
+-                            className="w-full bg-white dark:bg-slate-800 rounded-xl pl-9 pr-4 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-premium-emerald/20 transition-all text-slate-900 dark:text-white"
+-                            value={clientSearchTerm}
+-                            onChange={(e) => setClientSearchTerm(e.target.value)}
+-                          />
+-                        </div>
+-                     </div>
+-                     <div className="overflow-y-auto custom-scrollbar p-2">
+-                        <button 
+-                          onClick={() => { setSelectedClientId(''); setIsClientPickerOpen(false); setIsCredit(false); }}
+-                          className="w-full p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 text-left transition-colors flex flex-col"
++                    exit={{ opacity: 0, y: 6, scale: 0.97 }}
++                    className="absolute top-full left-0 right-0 mt-1.5 z-50 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden"
++                  >
++                    <div className="p-2 border-b border-slate-50 dark:border-slate-800">
++                      <div className="relative">
++                        <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
++                        <input
++                          autoFocus
++                          type="text"
++                          placeholder="Buscar cliente..."
++                          className="w-full bg-slate-50 dark:bg-slate-800 rounded-xl pl-8 pr-3 py-2 text-sm font-bold outline-none text-slate-900 dark:text-white"
++                          value={clientSearchTerm}
++                          onChange={e => setClientSearchTerm(e.target.value)}
++                        />
++                      </div>
++                    </div>
++                    <div className="overflow-y-auto max-h-48 custom-scrollbar p-1.5">
++                      <button
++                        onClick={() => { setSelectedClientId(''); setIsClientPickerOpen(false); setIsCredit(false); }}
++                        className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
++                      >
++                        <p className="text-sm font-bold text-slate-800 dark:text-white">Consumidor Final</p>
++                        <p className="text-[10px] text-slate-400 font-bold uppercase">Contado</p>
++                      </button>
++                      {filteredClients.map(c => (
++                        <button
++                          key={c.id}
++                          onClick={() => { setSelectedClientId(c.id.toString()); setIsClientPickerOpen(false); setClientSearchTerm(''); }}
++                          className={`w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors mt-0.5 ${
++                            selectedClientId === c.id.toString() ? 'bg-emerald-50 dark:bg-emerald-900/20' : ''
++                          }`}
                          >
--                          <p className="text-sm font-bold text-slate-800 dark:text-white">{c.name}</p>
--                          <p className="text-[10px] text-slate-400 font-bold uppercase">ID: {c.identification || 'N/A'}</p>
-+                          <span className="text-sm font-bold text-slate-800 dark:text-white">Cliente Genérico</span>
-+                          <span className="text-[10px] text-slate-400 font-bold uppercase">Transacción de Contado</span>
+-                          <span className="text-sm font-bold text-slate-800 dark:text-white">Cliente Genérico</span>
+-                          <span className="text-[10px] text-slate-400 font-bold uppercase">Transacción de Contado</span>
++                          <p className="text-sm font-bold text-slate-800 dark:text-white">{c.name}</p>
++                          <p className="text-[10px] text-slate-400 font-bold uppercase">ID: {c.identification || 'N/A'}</p>
                          </button>
--                      ))}
--                      {filteredClients.length === 0 && clientSearchTerm && (
--                        <div className="py-6 text-center text-slate-400 text-xs font-bold">Sin resultados</div>
--                      )}
--                    </div>
--                  </motion.div>
--                )}
--              </AnimatePresence>
--            </div>
-+                        {filteredClients.map(c => (
-+                          <button 
-+                            key={c.id}
-+                            onClick={() => { setSelectedClientId(c.id.toString()); setIsClientPickerOpen(false); setClientSearchTerm(''); }}
-+                            className={`w-full p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 text-left transition-colors flex flex-col mt-1 ${selectedClientId === c.id.toString() ? 'bg-premium-emerald/10 border border-premium-emerald/20' : ''}`}
-+                          >
-+                            <span className="text-sm font-bold text-slate-800 dark:text-white">{c.name}</span>
-+                            <span className="text-[10px] text-slate-400 font-bold uppercase">ID: {c.identification || 'N/A'}</span>
-+                          </button>
-+                        ))}
-+                        {filteredClients.length === 0 && (
-+                          <div className="p-8 text-center opacity-30">
-+                            <User size={24} className="mx-auto mb-2" />
-+                            <p className="text-xs font-black uppercase">Sin resultados</p>
-+                          </div>
-+                        )}
-+                     </div>
-+                   </motion.div>
-+                 )}
-+               </AnimatePresence>
-+             </div>
+-                        {filteredClients.map(c => (
+-                          <button 
+-                            key={c.id}
+-                            onClick={() => { setSelectedClientId(c.id.toString()); setIsClientPickerOpen(false); setClientSearchTerm(''); }}
+-                            className={`w-full p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 text-left transition-colors flex flex-col mt-1 ${selectedClientId === c.id.toString() ? 'bg-premium-emerald/10 border border-premium-emerald/20' : ''}`}
+-                          >
+-                            <span className="text-sm font-bold text-slate-800 dark:text-white">{c.name}</span>
+-                            <span className="text-[10px] text-slate-400 font-bold uppercase">ID: {c.identification || 'N/A'}</span>
+-                          </button>
+-                        ))}
+-                        {filteredClients.length === 0 && (
+-                          <div className="p-8 text-center opacity-30">
+-                            <User size={24} className="mx-auto mb-2" />
+-                            <p className="text-xs font-black uppercase">Sin resultados</p>
+-                          </div>
+-                        )}
+-                     </div>
+-                   </motion.div>
+-                 )}
+-               </AnimatePresence>
+-             </div>
++                      ))}
++                      {filteredClients.length === 0 && clientSearchTerm && (
++                        <div className="py-6 text-center text-slate-400 text-xs font-bold">Sin resultados</div>
++                      )}
++                    </div>
++                  </motion.div>
++                )}
++              </AnimatePresence>
++            </div>
            </div>
  
--          {/* ── Cart Items — scrollable flex-1 ── */}
--          <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0 px-3 py-2">
--            <AnimatePresence>
--              {cart.length === 0 ? (
--                <motion.div
--                  initial={{ opacity: 0 }} animate={{ opacity: 1 }}
--                  className="flex flex-col items-center justify-center h-full py-16 text-slate-300 dark:text-slate-600"
--                >
--                  <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800/50 rounded-[20px] flex items-center justify-center mb-3">
--                    <ShoppingCart size={28} />
--                  </div>
--                  <p className="font-bold text-sm">Carrito vacío</p>
--                  <p className="text-xs mt-1">Toca un producto para agregarlo</p>
--                </motion.div>
--              ) : (
--                <div className="space-y-2 py-1">
--                  {cart.map(item => (
--                    <motion.div
-+          {/* Cart Items List */}
-+          <div className="flex-1 overflow-y-auto p-6 custom-scrollbar space-y-4">
-+             <AnimatePresence>
-+               {cart.length === 0 ? (
-+                  <motion.div 
-+                    initial={{ opacity: 0 }}
-+                    animate={{ opacity: 1 }}
-+                    className="h-full flex flex-col items-center justify-center text-slate-300 dark:text-slate-600"
-+                  >
-+                     <div className="w-20 h-20 bg-slate-50 dark:bg-slate-800/50 rounded-[30px] flex items-center justify-center mb-4">
-+                        <ShoppingCart size={32} />
-+                     </div>
-+                     <p className="font-bold">El carrito está vacío</p>
-+                     <p className="text-xs mt-1 text-slate-400">Selecciona productos de la grilla</p>
-+                  </motion.div>
-+               ) : (
-+                 cart.map(item => (
-+                    <motion.div 
+-          {/* Cart Items List */}
+-          <div className="flex-1 overflow-y-auto p-6 custom-scrollbar space-y-4">
+-             <AnimatePresence>
+-               {cart.length === 0 ? (
+-                  <motion.div 
+-                    initial={{ opacity: 0 }}
+-                    animate={{ opacity: 1 }}
+-                    className="h-full flex flex-col items-center justify-center text-slate-300 dark:text-slate-600"
+-                  >
+-                     <div className="w-20 h-20 bg-slate-50 dark:bg-slate-800/50 rounded-[30px] flex items-center justify-center mb-4">
+-                        <ShoppingCart size={32} />
+-                     </div>
+-                     <p className="font-bold">El carrito está vacío</p>
+-                     <p className="text-xs mt-1 text-slate-400">Selecciona productos de la grilla</p>
+-                  </motion.div>
+-               ) : (
+-                 cart.map(item => (
+-                    <motion.div 
++          {/* ── Cart Items — scrollable flex-1 ── */}
++          <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0 px-3 py-2">
++            <AnimatePresence>
++              {cart.length === 0 ? (
++                <motion.div
++                  initial={{ opacity: 0 }} animate={{ opacity: 1 }}
++                  className="flex flex-col items-center justify-center h-full py-16 text-slate-300 dark:text-slate-600"
++                >
++                  <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800/50 rounded-[20px] flex items-center justify-center mb-3">
++                    <ShoppingCart size={28} />
++                  </div>
++                  <p className="font-bold text-sm">Carrito vacío</p>
++                  <p className="text-xs mt-1">Toca un producto para agregarlo</p>
++                </motion.div>
++              ) : (
++                <div className="space-y-2 py-1">
++                  {cart.map(item => (
++                    <motion.div
                        layout
                        initial={{ opacity: 0, x: 20 }}
                        animate={{ opacity: 1, x: 0 }}
--                      exit={{ opacity: 0, x: -20, height: 0 }}
--                      key={item.product.id}
--                      className="flex items-center gap-3 bg-white dark:bg-slate-800/50 rounded-2xl p-3 border border-slate-100 dark:border-slate-700/50"
-+                      exit={{ opacity: 0, x: -20 }}
-+                      key={item.product.id} 
-+                      className="flex gap-4 p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-black/5 dark:border-white/5"
+-                      exit={{ opacity: 0, x: -20 }}
+-                      key={item.product.id} 
+-                      className="flex gap-4 p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-black/5 dark:border-white/5"
++                      exit={{ opacity: 0, x: -20, height: 0 }}
++                      key={item.product.id}
++                      className="flex items-center gap-3 bg-white dark:bg-slate-800/50 rounded-2xl p-3 border border-slate-100 dark:border-slate-700/50"
                      >
--                      {/* Product info */}
--                      <div className="flex-1 min-w-0">
--                        <p className="font-bold text-slate-800 dark:text-slate-100 text-sm leading-tight truncate">
--                          {item.product.name}
--                        </p>
--                        <p className="text-xs text-slate-400 font-bold mt-0.5">
--                          ₡{item.product.salePrice.toLocaleString()} c/u
--                        </p>
--                      </div>
--
--                      {/* Qty controls */}
--                      <div className="flex items-center bg-slate-100 dark:bg-slate-700/50 rounded-xl p-0.5 gap-0.5 shrink-0">
--                        <button
--                          onClick={() => updateQty(item.product.id, -1)}
--                          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white dark:hover:bg-slate-600 transition-colors text-slate-600 dark:text-slate-300"
--                        ><Minus size={13} /></button>
--                        <span className="w-7 text-center text-sm font-black text-slate-900 dark:text-white">
--                          {item.qty}
--                        </span>
--                        <button
--                          onClick={() => updateQty(item.product.id, 1)}
--                          disabled={item.qty >= item.product.stockQuantity}
--                          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white dark:hover:bg-slate-600 transition-colors text-premium-emerald disabled:opacity-30"
--                        ><Plus size={13} /></button>
--                      </div>
--
--                      {/* Line total + remove */}
--                      <div className="text-right shrink-0 min-w-[72px]">
--                        <p className="font-black text-slate-900 dark:text-white text-sm">
--                          ₡{(item.product.salePrice * item.qty).toLocaleString()}
--                        </p>
--                        <button
--                          onClick={() => removeFromCart(item.product.id)}
--                          className="text-slate-300 hover:text-red-500 transition-colors mt-0.5"
--                        ><X size={13} /></button>
--                      </div>
-+                       <div className="flex-1">
-+                          <p className="font-bold text-slate-800 dark:text-slate-100 text-sm mb-3">{item.product.name}</p>
-+                          <div className="flex items-center gap-3">
-+                             <div className="flex items-center bg-white dark:bg-slate-900 p-1 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
-+                                <button onClick={() => updateQty(item.product.id, -1)} className="p-1 px-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"><Minus size={14} /></button>
-+                                <span className="min-w-6 text-center text-sm font-black text-slate-900 dark:text-white px-1">{item.qty}</span>
-+                                <button onClick={() => updateQty(item.product.id, 1)} className="p-1 px-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-premium-emerald transition-colors" disabled={item.qty >= item.product.stockQuantity}><Plus size={14} /></button>
-+                             </div>
-+                             <span className="text-xs font-bold text-slate-400">x ₡{item.product.salePrice.toLocaleString()}</span>
-+                          </div>
-+                       </div>
-+                       <div className="flex flex-col items-end justify-between">
-+                          <button onClick={() => removeFromCart(item.product.id)} className="text-slate-300 hover:text-red-500 transition-colors p-1">
-+                            <X size={18} />
-+                          </button>
-+                          <span className="font-black text-slate-950 dark:text-white">₡{(item.product.salePrice * item.qty).toLocaleString()}</span>
-+                       </div>
+-                       <div className="flex-1">
+-                          <p className="font-bold text-slate-800 dark:text-slate-100 text-sm mb-3">{item.product.name}</p>
+-                          <div className="flex items-center gap-3">
+-                             <div className="flex items-center bg-white dark:bg-slate-900 p-1 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
+-                                <button onClick={() => updateQty(item.product.id, -1)} className="p-1 px-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"><Minus size={14} /></button>
+-                                <span className="min-w-6 text-center text-sm font-black text-slate-900 dark:text-white px-1">{item.qty}</span>
+-                                <button onClick={() => updateQty(item.product.id, 1)} className="p-1 px-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-premium-emerald transition-colors" disabled={item.qty >= item.product.stockQuantity}><Plus size={14} /></button>
+-                             </div>
+-                             <span className="text-xs font-bold text-slate-400">x ₡{item.product.salePrice.toLocaleString()}</span>
+-                          </div>
+-                       </div>
+-                       <div className="flex flex-col items-end justify-between">
+-                          <button onClick={() => removeFromCart(item.product.id)} className="text-slate-300 hover:text-red-500 transition-colors p-1">
+-                            <X size={18} />
+-                          </button>
+-                          <span className="font-black text-slate-950 dark:text-white">₡{(item.product.salePrice * item.qty).toLocaleString()}</span>
+-                       </div>
++                      {/* Product info */}
++                      <div className="flex-1 min-w-0">
++                        <p className="font-bold text-slate-800 dark:text-slate-100 text-sm leading-tight truncate">
++                          {item.product.name}
++                        </p>
++                        <p className="text-xs text-slate-400 font-bold mt-0.5">
++                          ₡{item.product.salePrice.toLocaleString()} c/u
++                        </p>
++                      </div>
++
++                      {/* Qty controls */}
++                      <div className="flex items-center bg-slate-100 dark:bg-slate-700/50 rounded-xl p-0.5 gap-0.5 shrink-0">
++                        <button
++                          onClick={() => updateQty(item.product.id, -1)}
++                          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white dark:hover:bg-slate-600 transition-colors text-slate-600 dark:text-slate-300"
++                        ><Minus size={13} /></button>
++                        <span className="w-7 text-center text-sm font-black text-slate-900 dark:text-white">
++                          {item.qty}
++                        </span>
++                        <button
++                          onClick={() => updateQty(item.product.id, 1)}
++                          disabled={item.qty >= item.product.stockQuantity}
++                          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white dark:hover:bg-slate-600 transition-colors text-premium-emerald disabled:opacity-30"
++                        ><Plus size={13} /></button>
++                      </div>
++
++                      {/* Line total + remove */}
++                      <div className="text-right shrink-0 min-w-[72px]">
++                        <p className="font-black text-slate-900 dark:text-white text-sm">
++                          ₡{(item.product.salePrice * item.qty).toLocaleString()}
++                        </p>
++                        <button
++                          onClick={() => removeFromCart(item.product.id)}
++                          className="text-slate-300 hover:text-red-500 transition-colors mt-0.5"
++                        ><X size={13} /></button>
++                      </div>
                      </motion.div>
--                  ))}
--                </div>
--              )}
--            </AnimatePresence>
-+                 ))
-+               )}
-+             </AnimatePresence>
+-                 ))
+-               )}
+-             </AnimatePresence>
++                  ))}
++                </div>
++              )}
++            </AnimatePresence>
            </div>
  
--          {/* ── Totals + Discount + Payment — fixed bottom ── */}
--          <div className="shrink-0 border-t border-slate-100 dark:border-slate-800 px-5 pt-4 pb-5 space-y-3">
--
--            {/* Totals */}
--            <div className="space-y-1.5">
--              <div className="flex justify-between text-xs font-bold text-slate-400 uppercase tracking-wider">
--                <span>Subtotal</span>
--                <span className="text-slate-700 dark:text-slate-300">₡{subtotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
--              </div>
--              {discount && discountAmount > 0 && (
--                <div className="flex justify-between text-xs font-bold text-amber-500 uppercase tracking-wider">
--                  <span>Descuento</span>
--                  <span>−₡{discountAmount.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
--                </div>
--              )}
--              <div className="flex justify-between text-xs font-bold text-slate-400 uppercase tracking-wider">
--                <span>IVA</span>
--                <span className="text-slate-700 dark:text-slate-300">₡{tax.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
--              </div>
--              <div className="flex justify-between items-center pt-1.5 border-t border-slate-100 dark:border-slate-800">
--                <span className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wide">TOTAL</span>
--                <span className="text-2xl font-black text-slate-900 dark:text-white">₡{total.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
--              </div>
--            </div>
--
--            {/* Discount toggle */}
--            <InlineDiscount subtotal={subtotal} discount={discount} onChange={setDiscount} />
--
--            {/* Credit toggle — only if client selected */}
--            {selectedClientId && (
--              <button
--                onClick={() => setIsCredit(c => !c)}
--                className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl border text-sm font-bold transition-all ${
--                  isCredit
--                    ? 'bg-premium-emerald/10 border-premium-emerald/30 text-premium-emerald'
--                    : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500'
--                }`}
--              >
--                <span className="flex items-center gap-2"><Wallet size={14} /> Venta a Crédito</span>
--                <div className={`w-10 h-5 rounded-full relative transition-colors ${isCredit ? 'bg-premium-emerald' : 'bg-slate-300 dark:bg-slate-600'}`}>
--                  <motion.div animate={{ x: isCredit ? 20 : 2 }} className="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow" />
--                </div>
--              </button>
--            )}
--
--            {/* Payment */}
--            <AnimatePresence mode="wait">
--              {!showPaymentMethods ? (
--                <motion.button
--                  key="pay-btn"
--                  initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
--                  onClick={() => { if (cart.length === 0) return; setShowPaymentMethods(true); }}
--                  disabled={cart.length === 0}
--                  className="w-full btn-premium-emerald py-4 flex flex-col items-center gap-0.5 disabled:opacity-30"
--                >
--                  <span className="text-[10px] font-black uppercase tracking-widest opacity-75">Confirmar y Pagar</span>
--                  <span className="text-xl font-black">₡{total.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
--                </motion.button>
--              ) : (
--                <motion.div
--                  key="payment-opts"
--                  initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
--                  className="space-y-2 overflow-hidden"
--                >
--                  <div className="flex items-center justify-between">
--                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Método de Pago</span>
--                    <button
--                      onClick={() => setShowPaymentMethods(false)}
--                      className="text-[10px] font-black text-slate-400 hover:text-slate-600 uppercase tracking-widest"
--                    >← Volver</button>
--                  </div>
--                  <div className="grid grid-cols-2 gap-2">
--                    <button
--                      onClick={() => handleCheckout('CASH')}
--                      className="flex items-center justify-center gap-2 bg-slate-900 dark:bg-white text-white dark:text-slate-950 font-black rounded-2xl py-4 hover:scale-[1.02] active:scale-[0.98] transition-all text-sm"
--                    ><Banknote size={16} /> Efectivo</button>
--                    <button
--                      onClick={() => handleCheckout('CARD')}
--                      className="flex items-center justify-center gap-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-black rounded-2xl py-4 border border-slate-200 dark:border-slate-700 hover:scale-[1.02] active:scale-[0.98] transition-all text-sm"
--                    ><CreditCard size={16} /> Tarjeta</button>
--                    <button
--                      onClick={() => handleCheckout('SINPE_MOVIL')}
--                      className="flex items-center justify-center gap-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-black rounded-2xl py-4 border border-slate-200 dark:border-slate-700 hover:scale-[1.02] active:scale-[0.98] transition-all text-sm"
--                    ><Smartphone size={16} /> SINPE</button>
--                    <button
--                      onClick={() => handleCheckout('CREDIT')}
--                      disabled={!selectedClientId}
--                      className="flex items-center justify-center gap-2 btn-premium-emerald py-4 disabled:opacity-30 hover:scale-[1.02] active:scale-[0.98] transition-all text-sm"
--                    ><Wallet size={16} /> Crédito</button>
--                  </div>
--                </motion.div>
--              )}
--            </AnimatePresence>
-+          {/* Pricing & Checkout Section */}
-+           <div className="bg-white dark:bg-slate-950 border-t border-slate-100 dark:border-slate-800 p-8">
-+             <div className="space-y-3 mb-8">
-+               <div className="flex justify-between text-slate-400 dark:text-slate-500 text-[10px] font-black uppercase tracking-[0.2em]">
-+                 <span>Subtotal</span>
-+                 <span className="text-slate-900 dark:text-white">₡{subtotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
-+               </div>
-+               {discount && (
-+                 <div className="flex justify-between text-amber-600 dark:text-amber-400 text-[10px] font-black uppercase tracking-[0.2em]">
-+                   <span>Descuento</span>
-+                   <span>-₡{discountAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
-+                 </div>
-+               )}
-+               <div className="flex justify-between text-slate-400 dark:text-slate-500 text-[10px] font-black uppercase tracking-[0.2em]">
-+                 <span>Impuestos (IVA)</span>
-+                 <span className="text-slate-900 dark:text-white">₡{tax.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
-+               </div>
-+             </div>
-+             {/* Discount Manager mejorado */}
-+             <div className="mb-8">
-+               <div className="premium-panel p-6 rounded-3xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 shadow-lg">
-+                <DiscountManager 
-+                  subtotal={subtotal}
-+                  currentDiscount={discount}
-+                  onDiscountChange={setDiscount}
-+                />
-+               </div>
-+             </div>
+-          {/* Pricing & Checkout Section */}
+-          <div className="bg-white dark:bg-slate-950 border-t border-slate-100 dark:border-slate-800 p-8">
+-             <div className="space-y-3 mb-6">
+-                <div className="flex justify-between text-slate-400 dark:text-slate-500 text-[10px] font-black uppercase tracking-[0.2em]">
+-                   <span>Subtotal</span>
+-                   <span className="text-slate-900 dark:text-white">₡{subtotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
++          {/* ── Totals + Discount + Payment — fixed bottom ── */}
++          <div className="shrink-0 border-t border-slate-100 dark:border-slate-800 px-5 pt-4 pb-5 space-y-3">
 +
-+             <AnimatePresence mode="wait">
-+               {!showPaymentMethods ? (
-+                 <motion.button
-+                    key="pay-button"
-+                    initial={{ opacity: 0, y: 10 }}
-+                    animate={{ opacity: 1, y: 0 }}
-+                    exit={{ opacity: 0, y: -10 }}
-+                    onClick={() => setShowPaymentMethods(true)}
-+                    disabled={cart.length === 0}
-+                    className="w-full btn-premium-emerald py-6 flex flex-col items-center justify-center gap-1 group disabled:opacity-30"
-+                 >
-+                    <span className="text-xs font-black uppercase tracking-widest opacity-70">Confirmar y Pagar</span>
-+                    <span className="text-2xl font-black">₡{total.toLocaleString()}</span>
-+                 </motion.button>
-+               ) : (
-+                 <motion.div
-+                    key="payment-options"
-+                    initial={{ opacity: 0, height: 0 }}
-+                    animate={{ opacity: 1, height: 'auto' }}
-+                    exit={{ opacity: 0, height: 0 }}
-+                    className="space-y-4"
-+                 >
-+                    <div className="flex items-center justify-between mb-2">
-+                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Seleccionar Método</span>
-+                       <button onClick={() => setShowPaymentMethods(false)} className="text-[10px] font-black text-premium-emerald uppercase tracking-widest hover:underline text-rose-500">Volver al Carrito</button>
-+                    </div>
-+                    <div className="grid grid-cols-2 gap-3">
-+                       <button 
-+                          onClick={() => handleCheckout("CASH")}
-+                          className="bg-slate-900 dark:bg-white text-white dark:text-slate-950 font-black rounded-2xl py-4 flex items-center justify-center gap-2 hover:scale-[1.02] transition-all">
-+                          <Banknote size={18} />
-+                          Efectivo
-+                       </button>
-+                       <button 
-+                          onClick={() => handleCheckout("CARD")}
-+                          className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-black rounded-2xl py-4 border border-slate-200 dark:border-slate-800 flex items-center justify-center gap-2 hover:scale-[1.02] transition-all">
-+                          <CreditCard size={18} />
-+                          Tarjeta
-+                       </button>
-+                       <button 
-+                          onClick={() => handleCheckout("SINPE_MOVIL")}
-+                          className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-black rounded-2xl py-4 border border-slate-200 dark:border-slate-800 flex items-center justify-center gap-2 hover:scale-[1.02] transition-all">
-+                          <Smartphone size={18} />
-+                          SINPE
-+                       </button>
-+                       <button 
-+                          onClick={() => handleCheckout("CREDIT")}
-+                          disabled={!selectedClientId}
-+                          className="btn-premium-emerald py-4 flex items-center justify-center gap-2 hover:scale-[1.02] transition-all disabled:opacity-30">
-+                          <Wallet size={18} />
-+                          Crédito
-+                       </button>
-+                    </div>
-+                 </motion.div>
-+               )}
-+             </AnimatePresence>
++            {/* Totals */}
++            <div className="space-y-1.5">
++              <div className="flex justify-between text-xs font-bold text-slate-400 uppercase tracking-wider">
++                <span>Subtotal</span>
++                <span className="text-slate-700 dark:text-slate-300">₡{subtotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
++              </div>
++              {discount && discountAmount > 0 && (
++                <div className="flex justify-between text-xs font-bold text-amber-500 uppercase tracking-wider">
++                  <span>Descuento</span>
++                  <span>−₡{discountAmount.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                 </div>
+-                <div className="flex justify-between text-slate-400 dark:text-slate-500 text-[10px] font-black uppercase tracking-[0.2em]">
+-                   <span>Impuestos (IVA)</span>
+-                   <span className="text-slate-900 dark:text-white">₡{tax.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
++              )}
++              <div className="flex justify-between text-xs font-bold text-slate-400 uppercase tracking-wider">
++                <span>IVA</span>
++                <span className="text-slate-700 dark:text-slate-300">₡{tax.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
++              </div>
++              <div className="flex justify-between items-center pt-1.5 border-t border-slate-100 dark:border-slate-800">
++                <span className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wide">TOTAL</span>
++                <span className="text-2xl font-black text-slate-900 dark:text-white">₡{total.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
++              </div>
++            </div>
++
++            {/* Discount toggle */}
++            <InlineDiscount subtotal={subtotal} discount={discount} onChange={setDiscount} />
++
++            {/* Credit toggle — only if client selected */}
++            {selectedClientId && (
++              <button
++                onClick={() => setIsCredit(c => !c)}
++                className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl border text-sm font-bold transition-all ${
++                  isCredit
++                    ? 'bg-premium-emerald/10 border-premium-emerald/30 text-premium-emerald'
++                    : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500'
++                }`}
++              >
++                <span className="flex items-center gap-2"><Wallet size={14} /> Venta a Crédito</span>
++                <div className={`w-10 h-5 rounded-full relative transition-colors ${isCredit ? 'bg-premium-emerald' : 'bg-slate-300 dark:bg-slate-600'}`}>
++                  <motion.div animate={{ x: isCredit ? 20 : 2 }} className="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow" />
+                 </div>
+-             </div>
+-
+-             <AnimatePresence mode="wait">
+-               {!showPaymentMethods ? (
+-                 <motion.button
+-                    key="pay-button"
+-                    initial={{ opacity: 0, y: 10 }}
+-                    animate={{ opacity: 1, y: 0 }}
+-                    exit={{ opacity: 0, y: -10 }}
+-                    onClick={() => setShowPaymentMethods(true)}
+-                    disabled={cart.length === 0}
+-                    className="w-full btn-premium-emerald py-6 flex flex-col items-center justify-center gap-1 group disabled:opacity-30"
+-                 >
+-                    <span className="text-xs font-black uppercase tracking-widest opacity-70">Confirmar y Pagar</span>
+-                    <span className="text-2xl font-black">₡{total.toLocaleString()}</span>
+-                 </motion.button>
+-               ) : (
+-                 <motion.div
+-                    key="payment-options"
+-                    initial={{ opacity: 0, height: 0 }}
+-                    animate={{ opacity: 1, height: 'auto' }}
+-                    exit={{ opacity: 0, height: 0 }}
+-                    className="space-y-4"
+-                 >
+-                    <div className="flex items-center justify-between mb-2">
+-                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Seleccionar Método</span>
+-                       <button onClick={() => setShowPaymentMethods(false)} className="text-[10px] font-black text-premium-emerald uppercase tracking-widest hover:underline text-rose-500">Volver al Carrito</button>
+-                    </div>
+-                    <div className="grid grid-cols-2 gap-3">
+-                       <button 
+-                          onClick={() => handleCheckout("CASH")}
+-                          className="bg-slate-900 dark:bg-white text-white dark:text-slate-950 font-black rounded-2xl py-4 flex items-center justify-center gap-2 hover:scale-[1.02] transition-all">
+-                          <Banknote size={18} />
+-                          Efectivo
+-                       </button>
+-                       <button 
+-                          onClick={() => handleCheckout("CARD")}
+-                          className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-black rounded-2xl py-4 border border-slate-200 dark:border-slate-800 flex items-center justify-center gap-2 hover:scale-[1.02] transition-all">
+-                          <CreditCard size={18} />
+-                          Tarjeta
+-                       </button>
+-                       <button 
+-                          onClick={() => handleCheckout("SINPE_MOVIL")}
+-                          className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-black rounded-2xl py-4 border border-slate-200 dark:border-slate-800 flex items-center justify-center gap-2 hover:scale-[1.02] transition-all">
+-                          <Smartphone size={18} />
+-                          SINPE
+-                       </button>
+-                       <button 
+-                          onClick={() => handleCheckout("CREDIT")}
+-                          disabled={!selectedClientId}
+-                          className="btn-premium-emerald py-4 flex items-center justify-center gap-2 hover:scale-[1.02] transition-all disabled:opacity-30">
+-                          <Wallet size={18} />
+-                          Crédito
+-                       </button>
+-                    </div>
+-                 </motion.div>
+-               )}
+-             </AnimatePresence>
++              </button>
++            )}
++
++            {/* Payment */}
++            <AnimatePresence mode="wait">
++              {!showPaymentMethods ? (
++                <motion.button
++                  key="pay-btn"
++                  initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
++                  onClick={() => { if (cart.length === 0) return; setShowPaymentMethods(true); }}
++                  disabled={cart.length === 0}
++                  className="w-full btn-premium-emerald py-4 flex flex-col items-center gap-0.5 disabled:opacity-30"
++                >
++                  <span className="text-[10px] font-black uppercase tracking-widest opacity-75">Confirmar y Pagar</span>
++                  <span className="text-xl font-black">₡{total.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
++                </motion.button>
++              ) : (
++                <motion.div
++                  key="payment-opts"
++                  initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
++                  className="space-y-2 overflow-hidden"
++                >
++                  <div className="flex items-center justify-between">
++                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Método de Pago</span>
++                    <button
++                      onClick={() => setShowPaymentMethods(false)}
++                      className="text-[10px] font-black text-slate-400 hover:text-slate-600 uppercase tracking-widest"
++                    >← Volver</button>
++                  </div>
++                  <div className="grid grid-cols-2 gap-2">
++                    <button
++                      onClick={() => handleCheckout('CASH')}
++                      className="flex items-center justify-center gap-2 bg-slate-900 dark:bg-white text-white dark:text-slate-950 font-black rounded-2xl py-4 hover:scale-[1.02] active:scale-[0.98] transition-all text-sm"
++                    ><Banknote size={16} /> Efectivo</button>
++                    <button
++                      onClick={() => handleCheckout('CARD')}
++                      className="flex items-center justify-center gap-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-black rounded-2xl py-4 border border-slate-200 dark:border-slate-700 hover:scale-[1.02] active:scale-[0.98] transition-all text-sm"
++                    ><CreditCard size={16} /> Tarjeta</button>
++                    <button
++                      onClick={() => handleCheckout('SINPE_MOVIL')}
++                      className="flex items-center justify-center gap-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-black rounded-2xl py-4 border border-slate-200 dark:border-slate-700 hover:scale-[1.02] active:scale-[0.98] transition-all text-sm"
++                    ><Smartphone size={16} /> SINPE</button>
++                    <button
++                      onClick={() => handleCheckout('CREDIT')}
++                      disabled={!selectedClientId}
++                      className="flex items-center justify-center gap-2 btn-premium-emerald py-4 disabled:opacity-30 hover:scale-[1.02] active:scale-[0.98] transition-all text-sm"
++                    ><Wallet size={16} /> Crédito</button>
++                  </div>
++                </motion.div>
++              )}
++            </AnimatePresence>
            </div>
          </div>
        </div>
  
--      {/* ════════════════════════════════════════════════
--          CASH MODAL
--          ════════════════════════════════════════════════ */}
-+      {/* Modern Payment Modal */}
+-      {/* Modern Payment Modal */}
++      {/* ════════════════════════════════════════════════
++          CASH MODAL
++          ════════════════════════════════════════════════ */}
        <AnimatePresence>
          {isCashModalOpen && (
            <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
--            <motion.div
--              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-+            <motion.div 
-+              initial={{ opacity: 0 }}
-+              animate={{ opacity: 1 }}
-+              exit={{ opacity: 0 }}
+-            <motion.div 
+-              initial={{ opacity: 0 }}
+-              animate={{ opacity: 1 }}
+-              exit={{ opacity: 0 }}
++            <motion.div
++              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                onClick={() => setIsCashModalOpen(false)}
--              className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
--            />
--
--            <motion.div
--              initial={{ scale: 0.93, opacity: 0, y: 16 }}
--              animate={{ scale: 1, opacity: 1, y: 0 }}
--              exit={{ scale: 0.93, opacity: 0, y: 16 }}
--              className="relative z-10 bg-white dark:bg-slate-900 rounded-[32px] p-8 w-full max-w-md shadow-2xl overflow-hidden"
-+              className="absolute inset-0 bg-slate-950/60 backdrop-blur-md"
-+            ></motion.div>
-+            
-+            <motion.div 
-+              initial={{ scale: 0.9, opacity: 0, y: 20 }} 
-+              animate={{ scale: 1, opacity: 1, y: 0 }} 
-+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
-+              className="bg-white dark:bg-slate-900 rounded-[40px] p-10 w-full max-w-xl shadow-2xl relative z-10 overflow-hidden"
+-              className="absolute inset-0 bg-slate-950/60 backdrop-blur-md"
+-            ></motion.div>
+-            
+-            <motion.div 
+-              initial={{ scale: 0.9, opacity: 0, y: 20 }} 
+-              animate={{ scale: 1, opacity: 1, y: 0 }} 
+-              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+-              className="bg-white dark:bg-slate-900 rounded-[40px] p-10 w-full max-w-xl shadow-2xl relative z-10 overflow-hidden"
++              className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
++            />
++
++            <motion.div
++              initial={{ scale: 0.93, opacity: 0, y: 16 }}
++              animate={{ scale: 1, opacity: 1, y: 0 }}
++              exit={{ scale: 0.93, opacity: 0, y: 16 }}
++              className="relative z-10 bg-white dark:bg-slate-900 rounded-[32px] p-8 w-full max-w-md shadow-2xl overflow-hidden"
              >
--              {/* Decorative glow */}
--              <div className="absolute -top-20 -left-20 w-52 h-52 bg-premium-emerald/15 blur-[60px] rounded-full pointer-events-none" />
-+              {/* Background Glow */}
-+              <div className="absolute top-[-100px] left-[-100px] w-64 h-64 bg-premium-emerald/20 blur-[80px] rounded-full"></div>
+-              {/* Background Glow */}
+-              <div className="absolute top-[-100px] left-[-100px] w-64 h-64 bg-premium-emerald/20 blur-[80px] rounded-full"></div>
++              {/* Decorative glow */}
++              <div className="absolute -top-20 -left-20 w-52 h-52 bg-premium-emerald/15 blur-[60px] rounded-full pointer-events-none" />
  
--              <div className="flex justify-between items-start mb-6 relative">
-+              <div className="flex justify-between items-center mb-10 relative">
+-              <div className="flex justify-between items-center mb-10 relative">
++              <div className="flex justify-between items-start mb-6 relative">
                  <div>
--                  <h3 className="text-2xl font-black text-slate-900 dark:text-white">Pago en Efectivo</h3>
--                  <p className="text-sm text-slate-500 mt-0.5">Ingresa el monto recibido del cliente</p>
-+                  <h3 className="text-3xl font-black text-slate-900 dark:text-white">Pago en Efectivo</h3>
-+                  <p className="text-slate-500 font-medium">Completa la transacción del cliente</p>
+-                  <h3 className="text-3xl font-black text-slate-900 dark:text-white">Pago en Efectivo</h3>
+-                  <p className="text-slate-500 font-medium">Completa la transacción del cliente</p>
++                  <h3 className="text-2xl font-black text-slate-900 dark:text-white">Pago en Efectivo</h3>
++                  <p className="text-sm text-slate-500 mt-0.5">Ingresa el monto recibido del cliente</p>
                  </div>
                  <button
                    onClick={() => setIsCashModalOpen(false)}
--                  className="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-800 rounded-xl text-slate-500 hover:text-slate-800 transition-colors"
--                ><X size={20} /></button>
-+                  className="w-12 h-12 flex items-center justify-center bg-slate-100 dark:bg-slate-800 rounded-2xl text-slate-500 hover:text-slate-800 transition-colors"
-+                >
-+                  <X size={24} />
-+                </button>
+-                  className="w-12 h-12 flex items-center justify-center bg-slate-100 dark:bg-slate-800 rounded-2xl text-slate-500 hover:text-slate-800 transition-colors"
+-                >
+-                  <X size={24} />
+-                </button>
++                  className="w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-800 rounded-xl text-slate-500 hover:text-slate-800 transition-colors"
++                ><X size={20} /></button>
                </div>
  
--              {/* Amount to collect */}
--              <div className="bg-slate-50 dark:bg-slate-950 rounded-2xl px-5 py-4 flex justify-between items-center mb-5 border border-slate-100 dark:border-slate-800">
--                <div>
--                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Monto a Cobrar</p>
--                  <p className="text-3xl font-black text-slate-900 dark:text-white">₡{total.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
--                </div>
--                <div className="w-12 h-12 bg-premium-emerald/10 rounded-xl flex items-center justify-center text-premium-emerald">
--                  <Banknote size={24} />
-+              <div className="space-y-8 relative">
-+                <div className="bg-slate-50 dark:bg-slate-950 p-8 rounded-3xl border border-slate-100 dark:border-slate-800 flex justify-between items-center">
-+                  <div>
-+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Monto a Cobrar</p>
-+                    <p className="text-4xl font-black text-slate-900 dark:text-white">₡{total.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
-+                  </div>
-+                  <div className="w-16 h-16 bg-premium-emerald/10 rounded-2xl flex items-center justify-center text-premium-emerald">
-+                    <Banknote size={32} />
-+                  </div>
-                 </div>
--              </div>
- 
--              {/* Cash input */}
--              <div className="mb-4">
--                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1">
--                  Monto Recibido
--                </label>
--                <div className="relative">
--                  <span className="absolute left-5 top-1/2 -translate-y-1/2 text-2xl font-black text-slate-300">₡</span>
--                  <input
--                    type="number"
--                    placeholder="0"
--                    value={cashAmount}
--                    onChange={e => setCashAmount(e.target.value)}
--                    className="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-2xl pl-12 pr-6 py-5 text-3xl font-black text-slate-900 dark:text-white focus:ring-4 focus:ring-premium-emerald/15 outline-none transition-all"
--                    autoFocus
--                  />
+-              <div className="space-y-8 relative">
+-                <div className="bg-slate-50 dark:bg-slate-950 p-8 rounded-3xl border border-slate-100 dark:border-slate-800 flex justify-between items-center">
+-                  <div>
+-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Monto a Cobrar</p>
+-                    <p className="text-4xl font-black text-slate-900 dark:text-white">₡{total.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
+-                  </div>
+-                  <div className="w-16 h-16 bg-premium-emerald/10 rounded-2xl flex items-center justify-center text-premium-emerald">
+-                    <Banknote size={32} />
+-                  </div>
++              {/* Amount to collect */}
++              <div className="bg-slate-50 dark:bg-slate-950 rounded-2xl px-5 py-4 flex justify-between items-center mb-5 border border-slate-100 dark:border-slate-800">
 +                <div>
-+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 ml-2">
-+                    Monto Recibido
-+                  </label>
-+                  <div className="relative">
-+                     <span className="absolute left-6 top-1/2 -translate-y-1/2 text-3xl font-black text-slate-400">₡</span>
-+                     <input
-+                       type="number"
-+                       placeholder="0.00"
-+                       value={cashAmount}
-+                       onChange={(e) => setCashAmount(e.target.value)}
-+                       className="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-[28px] pl-16 pr-8 py-8 text-4xl font-black text-slate-900 dark:text-white focus:ring-4 focus:ring-premium-emerald/10 outline-none transition-all"
-+                       autoFocus
-+                     />
-+                  </div>
++                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Monto a Cobrar</p>
++                  <p className="text-3xl font-black text-slate-900 dark:text-white">₡{total.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
                  </div>
--              </div>
- 
--              {/* Quick amounts */}
--              <div className="grid grid-cols-4 gap-2 mb-4">
--                {[1000, 2000, 5000, 10000].map(amt => (
--                  <button
--                    key={amt}
--                    onClick={() => setCashAmount((parseFloat(cashAmount || '0') + amt).toString())}
--                    className="py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl font-black text-xs text-slate-700 dark:text-slate-300 transition-colors"
--                  >+{(amt / 1000).toFixed(0)}K</button>
--                ))}
--              </div>
--
--              {/* Change preview */}
--              <AnimatePresence>
--                {cashAmount && (
--                  <motion.div
--                    initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
--                    className="overflow-hidden mb-4"
--                  >
--                    {parseFloat(cashAmount) >= total ? (
--                      <div className="flex justify-between items-center p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl border border-emerald-100 dark:border-emerald-800">
--                        <div>
--                          <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-0.5">Vuelto a entregar</p>
--                          <p className="text-2xl font-black text-emerald-600">
--                            ₡{(parseFloat(cashAmount) - total).toLocaleString(undefined, { maximumFractionDigits: 0 })}
--                          </p>
-+                <AnimatePresence>
-+                  {cashAmount && (
-+                    <motion.div 
-+                      initial={{ opacity: 0, height: 0 }}
-+                      animate={{ opacity: 1, height: 'auto' }}
-+                      exit={{ opacity: 0, height: 0 }}
-+                      className="overflow-hidden"
-+                    >
-+                      {parseFloat(cashAmount) >= total ? (
-+                        <div className="p-8 bg-emerald-50 dark:bg-emerald-900/20 rounded-3xl border-2 border-emerald-100 dark:border-emerald-800 flex justify-between items-center">
-+                          <div>
-+                            <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-1">Vuelto a entregar</p>
-+                            <p className="text-5xl font-black text-emerald-600">
-+                              ₡{(parseFloat(cashAmount) - total).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-+                            </p>
-+                          </div>
-+                          <div className="w-20 h-20 bg-emerald-500/10 rounded-full flex items-center justify-center text-emerald-500 border-4 border-emerald-500/20">
-+                             <Plus size={32} className="rotate-45" />
-+                          </div>
-                         </div>
--                        <div className="w-12 h-12 bg-emerald-500/10 rounded-full flex items-center justify-center text-emerald-500">
--                          <Plus size={24} className="rotate-45" />
-+                      ) : (
-+                        <div className="p-8 bg-amber-50 dark:bg-amber-900/20 rounded-3xl border-2 border-amber-100 dark:border-amber-800">
-+                          <p className="text-xs font-bold text-amber-600 uppercase tracking-widest mb-1">Faltante</p>
-+                          <p className="text-4xl font-black text-amber-600">
-+                            ₡{(total - parseFloat(cashAmount)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-+                          </p>
-                         </div>
--                      </div>
--                    ) : (
--                      <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-2xl border border-amber-100 dark:border-amber-800">
--                        <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-0.5">Faltante</p>
--                        <p className="text-2xl font-black text-amber-600">
--                          ₡{(total - parseFloat(cashAmount)).toLocaleString(undefined, { maximumFractionDigits: 0 })}
--                        </p>
--                      </div>
--                    )}
--                  </motion.div>
--                )}
--              </AnimatePresence>
-+                      )}
-+                    </motion.div>
-+                  )}
-+                </AnimatePresence>
- 
--              {/* Actions */}
--              <div className="flex gap-3">
--                <button
--                  onClick={() => setIsCashModalOpen(false)}
--                  className="flex-1 py-4 text-slate-500 font-bold rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
--                >Cancelar</button>
--                <button
--                  onClick={handleCashPayment}
--                  disabled={isProcessing || !cashAmount || parseFloat(cashAmount) < total}
--                  className="flex-1 bg-slate-950 dark:bg-white text-white dark:text-slate-950 font-black py-4 rounded-2xl shadow-lg disabled:opacity-30 transition-all hover:scale-[1.02] active:scale-[0.98]"
--                >
--                  {isProcessing ? 'Procesando...' : 'Confirmar Venta'}
--                </button>
-+                <div className="flex gap-4 pt-4">
-+                  <button
-+                    onClick={() => setIsCashModalOpen(false)}
-+                    className="flex-1 px-8 py-5 text-slate-500 dark:text-slate-400 font-bold rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-+                  >
-+                    Cancelar
-+                  </button>
-+                  <button
-+                    onClick={handleCashPayment}
-+                    disabled={isProcessing || !cashAmount || parseFloat(cashAmount) < total}
-+                    className="flex-1 bg-slate-950 dark:bg-white text-white dark:text-slate-950 font-black text-lg py-5 rounded-2xl shadow-2xl disabled:opacity-30 disabled:grayscale transition-all hover:scale-[1.02] active:scale-[0.98]"
-+                  >
-+                    {isProcessing ? 'Procesando...' : 'Confirmar Venta'}
-+                  </button>
++                <div className="w-12 h-12 bg-premium-emerald/10 rounded-xl flex items-center justify-center text-premium-emerald">
++                  <Banknote size={24} />
 +                </div>
++              </div>
+ 
+-                <div>
+-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 ml-2">
+-                    Monto Recibido
+-                  </label>
+-                  <div className="relative">
+-                     <span className="absolute left-6 top-1/2 -translate-y-1/2 text-3xl font-black text-slate-400">₡</span>
+-                     <input
+-                       type="number"
+-                       placeholder="0.00"
+-                       value={cashAmount}
+-                       onChange={(e) => setCashAmount(e.target.value)}
+-                       className="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-[28px] pl-16 pr-8 py-8 text-4xl font-black text-slate-900 dark:text-white focus:ring-4 focus:ring-premium-emerald/10 outline-none transition-all"
+-                       autoFocus
+-                     />
+-                  </div>
++              {/* Cash input */}
++              <div className="mb-4">
++                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1">
++                  Monto Recibido
++                </label>
++                <div className="relative">
++                  <span className="absolute left-5 top-1/2 -translate-y-1/2 text-2xl font-black text-slate-300">₡</span>
++                  <input
++                    type="number"
++                    placeholder="0"
++                    value={cashAmount}
++                    onChange={e => setCashAmount(e.target.value)}
++                    className="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-2xl pl-12 pr-6 py-5 text-3xl font-black text-slate-900 dark:text-white focus:ring-4 focus:ring-premium-emerald/15 outline-none transition-all"
++                    autoFocus
++                  />
+                 </div>
++              </div>
+ 
+-                <AnimatePresence>
+-                  {cashAmount && (
+-                    <motion.div 
+-                      initial={{ opacity: 0, height: 0 }}
+-                      animate={{ opacity: 1, height: 'auto' }}
+-                      exit={{ opacity: 0, height: 0 }}
+-                      className="overflow-hidden"
+-                    >
+-                      {parseFloat(cashAmount) >= total ? (
+-                        <div className="p-8 bg-emerald-50 dark:bg-emerald-900/20 rounded-3xl border-2 border-emerald-100 dark:border-emerald-800 flex justify-between items-center">
+-                          <div>
+-                            <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-1">Vuelto a entregar</p>
+-                            <p className="text-5xl font-black text-emerald-600">
+-                              ₡{(parseFloat(cashAmount) - total).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+-                            </p>
+-                          </div>
+-                          <div className="w-20 h-20 bg-emerald-500/10 rounded-full flex items-center justify-center text-emerald-500 border-4 border-emerald-500/20">
+-                             <Plus size={32} className="rotate-45" />
+-                          </div>
+-                        </div>
+-                      ) : (
+-                        <div className="p-8 bg-amber-50 dark:bg-amber-900/20 rounded-3xl border-2 border-amber-100 dark:border-amber-800">
+-                          <p className="text-xs font-bold text-amber-600 uppercase tracking-widest mb-1">Faltante</p>
+-                          <p className="text-4xl font-black text-amber-600">
+-                            ₡{(total - parseFloat(cashAmount)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
++              {/* Quick amounts */}
++              <div className="grid grid-cols-4 gap-2 mb-4">
++                {[1000, 2000, 5000, 10000].map(amt => (
++                  <button
++                    key={amt}
++                    onClick={() => setCashAmount((parseFloat(cashAmount || '0') + amt).toString())}
++                    className="py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl font-black text-xs text-slate-700 dark:text-slate-300 transition-colors"
++                  >+{(amt / 1000).toFixed(0)}K</button>
++                ))}
++              </div>
++
++              {/* Change preview */}
++              <AnimatePresence>
++                {cashAmount && (
++                  <motion.div
++                    initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
++                    className="overflow-hidden mb-4"
++                  >
++                    {parseFloat(cashAmount) >= total ? (
++                      <div className="flex justify-between items-center p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl border border-emerald-100 dark:border-emerald-800">
++                        <div>
++                          <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-0.5">Vuelto a entregar</p>
++                          <p className="text-2xl font-black text-emerald-600">
++                            ₡{(parseFloat(cashAmount) - total).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                           </p>
+                         </div>
+-                      )}
+-                    </motion.div>
+-                  )}
+-                </AnimatePresence>
++                        <div className="w-12 h-12 bg-emerald-500/10 rounded-full flex items-center justify-center text-emerald-500">
++                          <Plus size={24} className="rotate-45" />
++                        </div>
++                      </div>
++                    ) : (
++                      <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-2xl border border-amber-100 dark:border-amber-800">
++                        <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-0.5">Faltante</p>
++                        <p className="text-2xl font-black text-amber-600">
++                          ₡{(total - parseFloat(cashAmount)).toLocaleString(undefined, { maximumFractionDigits: 0 })}
++                        </p>
++                      </div>
++                    )}
++                  </motion.div>
++                )}
++              </AnimatePresence>
+ 
+-                <div className="flex gap-4 pt-4">
+-                  <button
+-                    onClick={() => setIsCashModalOpen(false)}
+-                    className="flex-1 px-8 py-5 text-slate-500 dark:text-slate-400 font-bold rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+-                  >
+-                    Cancelar
+-                  </button>
+-                  <button
+-                    onClick={handleCashPayment}
+-                    disabled={isProcessing || !cashAmount || parseFloat(cashAmount) < total}
+-                    className="flex-1 bg-slate-950 dark:bg-white text-white dark:text-slate-950 font-black text-lg py-5 rounded-2xl shadow-2xl disabled:opacity-30 disabled:grayscale transition-all hover:scale-[1.02] active:scale-[0.98]"
+-                  >
+-                    {isProcessing ? 'Procesando...' : 'Confirmar Venta'}
+-                  </button>
+-                </div>
++              {/* Actions */}
++              <div className="flex gap-3">
++                <button
++                  onClick={() => setIsCashModalOpen(false)}
++                  className="flex-1 py-4 text-slate-500 font-bold rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
++                >Cancelar</button>
++                <button
++                  onClick={handleCashPayment}
++                  disabled={isProcessing || !cashAmount || parseFloat(cashAmount) < total}
++                  className="flex-1 bg-slate-950 dark:bg-white text-white dark:text-slate-950 font-black py-4 rounded-2xl shadow-lg disabled:opacity-30 transition-all hover:scale-[1.02] active:scale-[0.98]"
++                >
++                  {isProcessing ? 'Procesando...' : 'Confirmar Venta'}
++                </button>
                </div>
              </motion.div>
            </div>
          )}
        </AnimatePresence>
--
--      {/* ── Invoice Modal (reemplaza window.confirm) ── */}
--      {invoiceData && (
--        <InvoiceModal
--          isOpen={true}
--          saleData={invoiceData.sale}
--          cart={invoiceData.cart}
--          client={invoiceData.client}
--          change={invoiceData.change}
--          onClose={() => setInvoiceData(null)}
--          onDownloadPDF={() => {
--            import('../../utils/pdfGenerator').then(({ generateInvoicePDF }) => {
--              generateInvoicePDF(invoiceData.sale, invoiceData.cart, invoiceData.client);
--            }).catch(() => toast.error('Error al generar PDF'));
--            setInvoiceData(null);
--          }}
--        />
--      )}
--    </>
-+    </div>
+-    </div>
++
++      {/* ── Invoice Modal (reemplaza window.confirm) ── */}
++      {invoiceData && (
++        <InvoiceModal
++          isOpen={true}
++          saleData={invoiceData.sale}
++          cart={invoiceData.cart}
++          client={invoiceData.client}
++          change={invoiceData.change}
++          onClose={() => setInvoiceData(null)}
++          onDownloadPDF={() => {
++            import('../../utils/pdfGenerator').then(({ generateInvoicePDF }) => {
++              generateInvoicePDF(invoiceData.sale, invoiceData.cart, invoiceData.client);
++            }).catch(() => toast.error('Error al generar PDF'));
++            setInvoiceData(null);
++          }}
++        />
++      )}
++    </>
    );
  }
-+
+-

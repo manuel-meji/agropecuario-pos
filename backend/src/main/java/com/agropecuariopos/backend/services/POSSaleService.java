@@ -52,6 +52,10 @@ public class POSSaleService {
             com.agropecuariopos.backend.models.Client client = clientRepository.findById(request.getClientId())
                     .orElseThrow(() -> new RuntimeException("Client Not Found. ID: " + request.getClientId()));
             newSale.setClient(client);
+            
+            // Populate details from entity to override any request omissions
+            newSale.setClientName(client.getName());
+            newSale.setClientIdentification(client.getIdentification());
         }
 
         BigDecimal subtotal = BigDecimal.ZERO;
@@ -65,7 +69,7 @@ public class POSSaleService {
                 Product product = productRepository.findById(itemReq.getProductId())
                         .orElseThrow(() -> new RuntimeException("Product Not Found. ID: " + itemReq.getProductId()));
 
-                if (product.getStockQuantity() < itemReq.getQuantity()) {
+                if (product.getStockQuantity() < itemReq.getQty()) {
                     throw new RuntimeException("Insufficient stock for Product: " + product.getName()
                             + " CABYS: " + product.getCabysCode());
                 }
@@ -73,7 +77,7 @@ public class POSSaleService {
                 SaleItem saleItem = new SaleItem();
                 saleItem.setSale(newSale);
                 saleItem.setProduct(product);
-                saleItem.setQuantity(itemReq.getQuantity());
+                saleItem.setQuantity(itemReq.getQty());
 
                 BigDecimal unitPrice = product.getSalePrice();
                 BigDecimal unitCost = product.getPurchaseCost();
@@ -83,7 +87,7 @@ public class POSSaleService {
                 saleItem.setUnitCostAtSale(unitCost);
                 saleItem.setItemDiscount(itemDiscount);
 
-                BigDecimal rawLineTotal = unitPrice.multiply(new BigDecimal(itemReq.getQuantity().toString()))
+                BigDecimal rawLineTotal = unitPrice.multiply(new BigDecimal(String.valueOf(itemReq.getQty())))
                         .subtract(itemDiscount);
 
                 BigDecimal taxRate = IVA_STANDARD;
@@ -99,7 +103,7 @@ public class POSSaleService {
                 saleItem.setItemTax(lineTax);
                 saleItem.setLineTotal(totalLineWithTax);
 
-                product.setStockQuantity(product.getStockQuantity() - itemReq.getQuantity());
+                product.setStockQuantity(product.getStockQuantity() - itemReq.getQty());
                 productRepository.save(product);
 
                 subtotal = subtotal.add(rawLineTotal);
@@ -107,7 +111,7 @@ public class POSSaleService {
                 finalTotal = finalTotal.add(totalLineWithTax);
 
                 BigDecimal itemsProfitBase = (unitPrice.subtract(unitCost))
-                        .multiply(new BigDecimal(itemReq.getQuantity().toString()))
+                        .multiply(new BigDecimal(String.valueOf(itemReq.getQty())))
                         .subtract(itemDiscount);
                 totalGrossProfit = totalGrossProfit.add(itemsProfitBase);
 
@@ -127,9 +131,20 @@ public class POSSaleService {
 
             // ——— Facturación Electrónica Hacienda (ASÍNCRONO) ———
             // Se ejecuta en hilo separado DESPUÉS del commit de la venta.
-            // Si falla, no afecta la venta. El daemon de polling reintentará.
-            haciendaInvoiceService.emitirComprobanteAsync(savedSale.getId());
-            logger.info("Emisión de comprobante electrónico encolada para venta {}", savedSale.getId());
+            // Registramos un Callback para que el hilo asíncrono se inicie SÓLO cuando la base de datos realmente guarde la venta.
+            if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+                org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                    new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            haciendaInvoiceService.emitirComprobanteAsync(savedSale.getId());
+                        }
+                    }
+                );
+            } else {
+                haciendaInvoiceService.emitirComprobanteAsync(savedSale.getId());
+            }
+            logger.info("Emisión de comprobante electrónico encolada (post-commit) para venta {}", savedSale.getId());
 
             return savedSale;
 
