@@ -217,7 +217,6 @@ public class SaleController {
             item.setQuantity(itemReq.getQty());
             item.setUnitPriceAtSale(product.getSalePrice());
             item.setUnitCostAtSale(product.getPurchaseCost());
-            item.setLineTotal(product.getSalePrice().multiply(BigDecimal.valueOf(itemReq.getQty())));
 
             item.setSale(sale);
             sale.getItems().add(item);

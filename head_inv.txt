@@ -1,0 +1,200 @@
+diff --git a/frontend/src/pages/inventory/InventoryView.tsx b/frontend/src/pages/inventory/InventoryView.tsx
+index 695c5f1c..5062a907 100644
+--- a/frontend/src/pages/inventory/InventoryView.tsx
++++ b/frontend/src/pages/inventory/InventoryView.tsx
+@@ -389,8 +389,7 @@ export default function InventoryView() {
+ 
+   const [newProduct, setNewProduct] = useState({
+     name: '', internalCode: '', cabysCode: '',
+-    purchaseCost: 0, salePrice: 0, stockQuantity: 0,
+-    taxRate: 13,
++    purchaseCost: 0, salePrice: 0, stockQuantity: 0, taxRate: 13,
+     category: { id: '' }
+   });
+ 
+@@ -428,9 +427,10 @@ export default function InventoryView() {
+       setEditingProductId(null);
+       setNewProduct({ name: '', internalCode: '', cabysCode: '', purchaseCost: 0, salePrice: 0, stockQuantity: 0, taxRate: 13, category: { id: '' } });
+       loadData();
+-    } catch (error) {
++    } catch (error: any) {
+       console.error(error);
+-      toast.error('Error validando datos o del servidor.');
++      const msg = error.response?.data?.message || 'Error validando datos o del servidor.';
++      toast.error(msg);
+     }
+   };
+ 
+@@ -443,7 +443,7 @@ export default function InventoryView() {
+       purchaseCost: item.purchaseCost || 0,
+       salePrice: item.salePrice || 0,
+       stockQuantity: item.stockQuantity || 0,
+-      taxRate: item.taxRate ?? 13,
++      taxRate: item.taxRate !== undefined ? item.taxRate : 13,
+       category: { id: item.category?.id?.toString() || '' }
+     });
+     setIsProductModalOpen(true);
+@@ -631,102 +631,75 @@ export default function InventoryView() {
+               initial={{ scale: 0.9, opacity: 0 }}
+               animate={{ scale: 1, opacity: 1 }}
+               exit={{ scale: 0.9, opacity: 0 }}
+-              className="bg-white dark:bg-slate-900 rounded-[40px] w-full max-w-xl shadow-2xl relative z-10 flex flex-col overflow-hidden"
+-              style={{ maxHeight: 'min(90vh, 780px)' }}
++              className="bg-white dark:bg-slate-900 rounded-[40px] p-10 w-full max-w-xl shadow-2xl relative z-10 overflow-hidden"
+             >
+-              {/* Deco blob */}
+-              <div className="absolute top-[-50px] right-[-50px] w-48 h-48 bg-blue-500/10 blur-[60px] rounded-full pointer-events-none" />
+-
+-              {/* ── Header (fijo) ── */}
+-              <div className="px-10 pt-10 pb-4 shrink-0 relative">
+-                <h3 className="text-2xl font-black mb-1">
+-                  {editingProductId ? 'Modificar Producto' : 'Nuevo Producto'}
+-                </h3>
+-                <p className="text-slate-500 text-sm font-medium">Información técnica del artículo en almacén.</p>
+-              </div>
+-
+-              {/* ── Scrollable fields ── */}
+-              <div className="flex-1 overflow-y-auto custom-scrollbar px-10 pb-2 relative">
+-                <div className="grid grid-cols-2 gap-4 pb-2">
++              <div className="absolute top-[-50px] right-[-50px] w-48 h-48 bg-blue-500/10 blur-[60px] rounded-full" />
++              <h3 className="text-2xl font-black mb-1 relative">
++                {editingProductId ? 'Modificar Producto' : 'Nuevo Producto'}
++              </h3>
++              <p className="text-slate-500 text-sm mb-8 relative font-medium">Información técnica del artículo en almacén.</p>
++
++              <div className="grid grid-cols-2 gap-4 mb-8 relative">
++                <div className="col-span-2">
++                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Descripción Comercial</label>
++                  <input type="text" placeholder="Ej. Fertilizante QPK 100 ml" className="premium-input w-full"
++                    value={newProduct.name} onChange={e => setNewProduct({ ...newProduct, name: e.target.value })} />
++                </div>
++                <div>
++                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Código Interno / SKU</label>
++                  <input type="text" placeholder="SKU-2353" className="premium-input w-full"
++                    value={newProduct.internalCode} onChange={e => setNewProduct({ ...newProduct, internalCode: e.target.value })} />
++                </div>
++                <div>
++                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Código CABYS</label>
++                  <input type="text" placeholder="13 dígitos..." className="premium-input w-full"
++                    value={newProduct.cabysCode} onChange={e => setNewProduct({ ...newProduct, cabysCode: e.target.value })} />
++                </div>
++                <div>
++                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Costo Compra (₡)</label>
++                  <input type="number" placeholder="₡ 0" className="premium-input w-full"
++                    value={newProduct.purchaseCost || ''} onChange={e => setNewProduct({ ...newProduct, purchaseCost: parseFloat(e.target.value) })} />
++                </div>
++                <div>
++                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Precio Venta (₡)</label>
++                  <input type="number" placeholder="₡ 0" className="premium-input w-full"
++                    value={newProduct.salePrice || ''} onChange={e => setNewProduct({ ...newProduct, salePrice: parseFloat(e.target.value) })} />
++                </div>
++                
++                {/* Profit Calculator */}
++                {newProduct.purchaseCost > 0 && (
+                   <div className="col-span-2">
+-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Descripción Comercial</label>
+-                    <input type="text" placeholder="Ej. Fertilizante QPK 100 ml" className="premium-input w-full"
+-                      value={newProduct.name} onChange={e => setNewProduct({ ...newProduct, name: e.target.value })} />
+-                  </div>
+-                  <div>
+-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Código Interno / SKU</label>
+-                    <input type="text" placeholder="SKU-2353" className="premium-input w-full"
+-                      value={newProduct.internalCode} onChange={e => setNewProduct({ ...newProduct, internalCode: e.target.value })} />
+-                  </div>
+-                  <div>
+-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Código CABYS</label>
+-                    <input type="text" placeholder="13 dígitos..." className="premium-input w-full"
+-                      value={newProduct.cabysCode} onChange={e => setNewProduct({ ...newProduct, cabysCode: e.target.value })} />
+-                  </div>
+-                  <div>
+-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Costo Compra (₡)</label>
+-                    <input type="number" placeholder="₡ 0" className="premium-input w-full"
+-                      value={newProduct.purchaseCost || ''} onChange={e => setNewProduct({ ...newProduct, purchaseCost: parseFloat(e.target.value) })} />
+-                  </div>
+-                  <div>
+-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Precio Venta (₡)</label>
+-                    <input type="number" placeholder="₡ 0" className="premium-input w-full"
+-                      value={newProduct.salePrice || ''} onChange={e => setNewProduct({ ...newProduct, salePrice: parseFloat(e.target.value) })} />
+-                  </div>
+-
+-                  {/* Profit Calculator */}
+-                  {newProduct.purchaseCost > 0 && (
+-                    <div className="col-span-2">
+-                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Calculadora de Ganancia</label>
+-                      <ProfitCalculator
+-                        purchaseCost={newProduct.purchaseCost}
+-                        salePrice={newProduct.salePrice || 0}
+-                        onPriceChange={(newPrice) => setNewProduct({ ...newProduct, salePrice: newPrice })}
+-                      />
+-                    </div>
+-                  )}
+-
+-                  <div>
+-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Stock Disponible</label>
+-                    <input type="number" placeholder="Cantidad..." className="premium-input w-full"
+-                      value={newProduct.stockQuantity || ''} onChange={e => setNewProduct({ ...newProduct, stockQuantity: parseInt(e.target.value) })} />
+-                  </div>
+-
+-                  {/* Searchable category select */}
+-                  <div>
+-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Categoría</label>
+-                    <CategorySelect
+-                      categories={categories}
+-                      value={newProduct.category.id}
+-                      onChange={id => setNewProduct({ ...newProduct, category: { id } })}
++                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Calculadora de Ganancia</label>
++                    <ProfitCalculator 
++                      purchaseCost={newProduct.purchaseCost}
++                      salePrice={newProduct.salePrice || 0}
++                      onPriceChange={(newPrice) => setNewProduct({ ...newProduct, salePrice: newPrice })}
+                     />
+                   </div>
++                )}
++                <div>
++                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Stock Disponible</label>
++                  <input type="number" placeholder="Cantidad..." className="premium-input w-full"
++                    value={newProduct.stockQuantity || ''} onChange={e => setNewProduct({ ...newProduct, stockQuantity: parseInt(e.target.value) })} />
++                </div>
++                <div>
++                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Impuesto (%)</label>
++                  <input type="number" step="0.5" placeholder="13.0" className="premium-input w-full"
++                    value={newProduct.taxRate} onChange={e => setNewProduct({ ...newProduct, taxRate: parseFloat(e.target.value) || 0 })} />
++                </div>
+ 
+-                  {/* Tax Rate selector */}
+-                  <div className="col-span-2">
+-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Tasa de Impuesto (IVA)</label>
+-                    <div className="grid grid-cols-4 gap-2">
+-                      {[{ label: '0% Exento', value: 0 }, { label: '1% Agroc.', value: 1 }, { label: '4% Reducido', value: 4 }, { label: '13% Estándar', value: 13 }].map(opt => (
+-                        <button
+-                          key={opt.value}
+-                          type="button"
+-                          onClick={() => setNewProduct({ ...newProduct, taxRate: opt.value })}
+-                          className={`py-2.5 rounded-xl text-xs font-black border-2 transition-all ${
+-                            newProduct.taxRate === opt.value
+-                              ? 'border-premium-emerald bg-premium-emerald/10 text-premium-emerald'
+-                              : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:border-slate-300'
+-                          }`}
+-                        >
+-                          {opt.label}
+-                        </button>
+-                      ))}
+-                    </div>
+-                  </div>
++                {/* ← Searchable category select */}
++                <div className="col-span-2">
++                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Categoría</label>
++                  <CategorySelect
++                    categories={categories}
++                    value={newProduct.category.id}
++                    onChange={id => setNewProduct({ ...newProduct, category: { id } })}
++                  />
+                 </div>
+               </div>
+ 
+-              {/* ── Footer (fijo) ── */}
+-              <div className="px-10 py-6 shrink-0 border-t border-slate-100 dark:border-slate-800 flex gap-4">
++              <div className="flex gap-4 relative">
+                 <button onClick={() => setIsProductModalOpen(false)}
+                   className="flex-1 py-4 text-slate-500 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 rounded-2xl transition-colors">
+                   Cancelar
