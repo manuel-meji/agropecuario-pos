@@ -31,8 +31,7 @@ public class Product {
     private String internalCode;
 
     // Código del banco central de 13 dígitos
-    @NotBlank
-    @Size(min = 13, max = 13)
+    @Size(max = 13)
     private String cabysCode;
 
     @DecimalMin("0.0")
