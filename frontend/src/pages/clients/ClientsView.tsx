@@ -2,13 +2,14 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Plus, Users, X, ChevronDown, Phone, Mail, MapPin, Hash, History } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getClients, createClient, getClientHistoryByClientId } from '../../services/api';
+import { getClients, createClient, updateClient, deleteClient, getClientHistoryByClientId } from '../../services/api';
 
 export default function ClientsView() {
   const [clients, setClients] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [editingClientId, setEditingClientId] = useState<number | null>(null);
   const [clientHistory, setClientHistory] = useState<any>(null);
   const [expandedPurchase, setExpandedPurchase] = useState<number | null>(null);
   const [newClient, setNewClient] = useState({ name: '', identification: '', email: '', phone: '', address: '' });
@@ -25,20 +26,38 @@ export default function ClientsView() {
 
   useEffect(() => { loadClients(); }, []);
 
-  const handleCreate = async () => {
+  const handleCreateOrUpdate = async () => {
     if (!newClient.name) {
       toast.error('El nombre del cliente es obligatorio.');
       return;
     }
     try {
-      await createClient(newClient);
-      toast.success('Cliente registrado exitosamente.');
+      if (editingClientId) {
+        await updateClient(editingClientId, newClient);
+        toast.success('Cliente actualizado exitosamente.');
+      } else {
+        await createClient(newClient);
+        toast.success('Cliente registrado exitosamente.');
+      }
       setIsModalOpen(false);
+      setEditingClientId(null);
       setNewClient({ name: '', identification: '', email: '', phone: '', address: '' });
       loadClients();
     } catch (error) {
       console.error(error);
-      toast.error('Hubo un error al guardar el cliente.');
+      toast.error(editingClientId ? 'Hubo un error al actualizar el cliente.' : 'Hubo un error al guardar el cliente.');
+    }
+  };
+
+  const handleDeleteClient = async (id: number, name: string) => {
+    if (!window.confirm(`¿Está seguro de eliminar al cliente "${name}"?`)) return;
+    try {
+      await deleteClient(id);
+      toast.success('Cliente eliminado correctamente.');
+      loadClients();
+    } catch (error) {
+      console.error(error);
+      toast.error('No se pudo eliminar el cliente. Verifique si tiene facturas o deudas asociadas.');
     }
   };
 
@@ -63,7 +82,11 @@ export default function ClientsView() {
           <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Directorio de Clientes</h2>
           <p className="text-slate-500 font-medium">Gestiona los clientes para asignarles ventas y créditos.</p>
         </div>
-        <button onClick={() => setIsModalOpen(true)} className="btn-premium-emerald flex items-center justify-center gap-2">
+        <button onClick={() => {
+          setEditingClientId(null);
+          setNewClient({ name: '', identification: '', email: '', phone: '', address: '' });
+          setIsModalOpen(true);
+        }} className="btn-premium-emerald flex items-center justify-center gap-2">
           <Plus size={18} /> Nuevo Cliente
         </button>
       </div>
@@ -127,12 +150,36 @@ export default function ClientsView() {
                     </div>
                   </td>
                   <td className="p-6 text-right">
-                    <button
-                      onClick={() => handleViewHistory(item)}
-                      className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                    >
-                      Ver Historial
-                    </button>
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => handleViewHistory(item)}
+                        className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                      >
+                        Ver Historial
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditingClientId(item.id);
+                          setNewClient({
+                            name: item.name || '',
+                            identification: item.identification || '',
+                            email: item.email || '',
+                            phone: item.phone || '',
+                            address: item.address || '',
+                          });
+                          setIsModalOpen(true);
+                        }}
+                        className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-premium-emerald hover:border-premium-emerald transition-colors"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => handleDeleteClient(item.id, item.name)}
+                        className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-red-500 hover:border-red-500 transition-colors"
+                      >
+                        Eliminar
+                      </button>
+                    </div>
                   </td>
                 </motion.tr>
               ))}
@@ -185,7 +232,9 @@ export default function ClientsView() {
               </div>
               <div className="flex gap-4 relative">
                 <button onClick={() => setIsModalOpen(false)} className="flex-1 py-4 text-slate-500 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 rounded-2xl transition-colors">Cancelar</button>
-                <button onClick={handleCreate} className="flex-1 btn-premium-emerald py-4">Confirmar Registro</button>
+                <button onClick={handleCreateOrUpdate} className="flex-1 btn-premium-emerald py-4">
+                  {editingClientId ? 'Actualizar Cliente' : 'Confirmar Registro'}
+                </button>
               </div>
             </motion.div>
           </div>

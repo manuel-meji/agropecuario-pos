@@ -7,7 +7,7 @@ import {
 import toast from 'react-hot-toast';
 import {
   getProducts, getCategories, createProduct, createCategory,
-  updateProduct, updateCategory, deleteCategory
+  updateProduct, updateCategory, deleteCategory, deleteProduct
 } from '../../services/api';
 import ProfitCalculator from '../../components/ProfitCalculator';
 
@@ -434,6 +434,18 @@ export default function InventoryView() {
     }
   };
 
+  const handleDeleteProduct = async (id: number, name: string) => {
+    if (!window.confirm(`¿Está seguro de eliminar el producto "${name}"?`)) return;
+    try {
+      await deleteProduct(id);
+      toast.success('Producto eliminado correctamente');
+      loadData();
+    } catch (error) {
+      console.error(error);
+      toast.error('No se pudo eliminar el producto. Revise si tiene ventas o compras asociadas.');
+    }
+  };
+
   const openEditModal = (item: any) => {
     setEditingProductId(item.id);
     setNewProduct({
@@ -580,12 +592,20 @@ export default function InventoryView() {
                       </div>
                     </td>
                     <td className="p-6 text-right">
-                      <button
-                        onClick={() => openEditModal(item)}
-                        className="w-10 h-10 flex items-center justify-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-400 hover:text-premium-emerald hover:border-premium-emerald transition-all ml-auto"
-                      >
-                        <Edit3 size={18} />
-                      </button>
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => openEditModal(item)}
+                          className="w-10 h-10 flex items-center justify-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-400 hover:text-premium-emerald hover:border-premium-emerald transition-all"
+                        >
+                          <Edit3 size={18} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteProduct(item.id, item.name)}
+                          className="w-10 h-10 flex items-center justify-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-400 hover:text-red-500 hover:border-red-500 transition-all"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
                     </td>
                   </motion.tr>
                 );

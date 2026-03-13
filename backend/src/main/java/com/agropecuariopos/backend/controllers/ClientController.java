@@ -10,6 +10,7 @@ import com.agropecuariopos.backend.repositories.ClientRepository;
 import com.agropecuariopos.backend.repositories.PaymentRecordRepository;
 import com.agropecuariopos.backend.repositories.SaleRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.lang.Nullable;
 import org.springframework.web.bind.annotation.*;
 
@@ -44,6 +45,30 @@ public class ClientController {
     @PostMapping
     public Client createClient(@RequestBody Client client) {
         return clientRepository.save(client);
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<Client> updateClient(@PathVariable Long id, @RequestBody Client clientDetails) {
+        Optional<Client> clientOpt = clientRepository.findById(id);
+        if (clientOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        Client client = clientOpt.get();
+        client.setName(clientDetails.getName());
+        client.setIdentification(clientDetails.getIdentification());
+        client.setEmail(clientDetails.getEmail());
+        client.setPhone(clientDetails.getPhone());
+        client.setAddress(clientDetails.getAddress());
+        return ResponseEntity.ok(clientRepository.save(client));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteClient(@PathVariable Long id) {
+        if (!clientRepository.existsById(id)) {
+            return ResponseEntity.notFound().build();
+        }
+        clientRepository.deleteById(id);
+        return ResponseEntity.ok().build();
     }
 
     @GetMapping("/{clientId}/history")

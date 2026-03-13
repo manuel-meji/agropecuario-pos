@@ -69,9 +69,8 @@ public class PurchaseService {
         // If CREDIT, create Account Payable
         if (purchase.getPaymentMethod() == Purchase.PaymentMethod.CREDIT && purchase.getSupplier() != null) {
             AccountPayable payable = new AccountPayable();
-            // Note: AccountPayable model uses supplierName string, but it would be better
-            // linked.
-            // For now, following the existing pattern in AccountReceivable.
+            // Link supplierId accurately in AccountPayable.
+            payable.setSupplierId(purchase.getSupplier().getId());
             payable.setSupplierName(purchase.getSupplier().getName());
             payable.setSupplierInvoiceReference(purchase.getInvoiceNumber());
             payable.setTotalDebt(purchase.getTotalAmount());

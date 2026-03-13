@@ -57,6 +57,42 @@ public class DataInitializer implements CommandLineRunner {
                     admin.setRoles(roles);
                     userRepository.save(admin);
                     System.out.println("Initial admin user created: admin / admin123");
-                });
+        });
+
+        repairOrphanedPayables();
+    }
+
+    @Autowired
+    private com.agropecuariopos.backend.repositories.AccountPayableRepository accountPayableRepository;
+    @Autowired
+    private com.agropecuariopos.backend.repositories.SupplierRepository supplierRepository;
+
+    private void repairOrphanedPayables() {
+        System.out.println("Starting data repair for orphaned AccountPayables...");
+        java.util.List<com.agropecuariopos.backend.models.AccountPayable> allPayables = accountPayableRepository.findAll();
+        long repairedCount = 0;
+
+        for (com.agropecuariopos.backend.models.AccountPayable payable : allPayables) {
+            if (payable.getSupplierId() == null && payable.getSupplierName() != null) {
+                // Try to find a supplier by name (exact match, case insensitive)
+                java.util.List<com.agropecuariopos.backend.models.Supplier> matches = supplierRepository.findAll().stream()
+                        .filter(s -> s.getName().equalsIgnoreCase(payable.getSupplierName()))
+                        .toList();
+
+                if (!matches.isEmpty()) {
+                    com.agropecuariopos.backend.models.Supplier supplier = matches.get(0);
+                    payable.setSupplierId(supplier.getId());
+                    payable.setSupplierName(supplier.getName()); // Standardize name
+                    accountPayableRepository.save(payable);
+                    repairedCount++;
+                }
+            }
+        }
+
+        if (repairedCount > 0) {
+            System.out.println("Data repair complete: " + repairedCount + " payables linked to suppliers.");
+        } else {
+            System.out.println("No orphaned payables found or matching suppliers not available.");
+        }
     }
 }

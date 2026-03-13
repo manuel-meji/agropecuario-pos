@@ -27,7 +27,7 @@ export default function PayablesView() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentId, setPaymentId] = useState<number | null>(null);
-  const [bulkPaymentSupplier, setBulkPaymentSupplier] = useState<string | null>(null);
+  const [bulkPaymentSupplierId, setBulkPaymentSupplierId] = useState<number | null>(null);
   const [maxPaymentAmount, setMaxPaymentAmount] = useState<number>(0);
 
   const loadData = async () => {
@@ -53,26 +53,26 @@ export default function PayablesView() {
       setSelectedSupplier(supplier);
       const [purchases, history] = await Promise.all([
         getPurchasesBySupplier(supplier.id),
-        getPayableHistory(supplier.name)
+        getPayableHistory(supplier.id)   // use ID — survives name changes
       ]);
       setSupplierPurchases(purchases);
       setSupplierPayables(history);
       setIsHistoryOpen(true);
     } catch (error) {
-      console.error(error);
-      toast.error('Error al cargar el historial de compras.');
+      console.error('Error fetching history:', error);
+      toast.error('Error al cargar datos del proveedor');
     }
   };
 
   const handlePaymentClick = (payableId: number) => {
     setPaymentId(payableId);
-    setBulkPaymentSupplier(null);
+    setBulkPaymentSupplierId(null);
     setPaymentAmount('');
     setShowPaymentModal(true);
   };
 
-  const handleBulkPaymentClick = (supplierName: string, maxAmount: number) => {
-    setBulkPaymentSupplier(supplierName);
+  const handleBulkPaymentClick = (supplierId: number, maxAmount: number) => {
+    setBulkPaymentSupplierId(supplierId);
     setMaxPaymentAmount(maxAmount);
     setPaymentId(null);
     setPaymentAmount('');
@@ -86,12 +86,12 @@ export default function PayablesView() {
     }
 
     try {
-      if (bulkPaymentSupplier) {
+      if (bulkPaymentSupplierId !== null) {
         if (parseFloat(paymentAmount) > maxPaymentAmount) {
           toast.error(`El monto no puede exceder el saldo pendiente de ₡${maxPaymentAmount.toLocaleString()}`);
           return;
         }
-        await makeSupplierBulkPayment(bulkPaymentSupplier, parseFloat(paymentAmount));
+        await makeSupplierBulkPayment(bulkPaymentSupplierId, parseFloat(paymentAmount));
         toast.success("Abono registrado correctamente");
       } else if (paymentId) {
         await makePayablePayment(paymentId, parseFloat(paymentAmount));
@@ -101,7 +101,7 @@ export default function PayablesView() {
       }
 
       setShowPaymentModal(false);
-      setBulkPaymentSupplier(null);
+      setBulkPaymentSupplierId(null);
       // Reload everything to stay hot
       loadData();
       if (selectedSupplier) {
@@ -113,9 +113,17 @@ export default function PayablesView() {
     }
   };
 
-  const getSupplierBalance = (supplierName: string) => {
+  const getSupplierBalance = (supplier: any) => {
     return payables
-      .filter(p => p.supplierName === supplierName)
+      .filter(p => {
+        // Prefer ID match (robust: survives name changes).
+        // Fall back to name only for legacy rows that pre-date the supplierId column
+        // (i.e. supplierId is null/undefined on the payable).
+        if (p.supplierId != null) {
+          return Number(p.supplierId) === Number(supplier.id);
+        }
+        return p.supplierName === supplier.name;
+      })
       .reduce((acc, curr) => acc + (curr.totalDebt - curr.amountPaid), 0);
   };
 
@@ -191,7 +199,7 @@ export default function PayablesView() {
             </thead>
             <tbody>
               {filteredSuppliers.map((item, index) => {
-                const balance = getSupplierBalance(item.name);
+                const balance = getSupplierBalance(item);
                 return (
                   <motion.tr
                     initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }}
@@ -227,7 +235,7 @@ export default function PayablesView() {
                       <div className="flex items-center justify-end gap-2">
                         {balance > 0 && (
                           <button
-                            onClick={() => handleBulkPaymentClick(item.name, balance)}
+                            onClick={() => handleBulkPaymentClick(item.id, balance)}
                             className="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-4 py-2 rounded-xl text-xs font-bold hover:bg-emerald-500 hover:text-white transition-colors"
                           >
                             Abonar
@@ -357,8 +365,14 @@ function HistoryModal({ onClose, supplier, purchases, payables, onPaymentClick, 
         <div className="overflow-y-auto custom-scrollbar flex-1 p-10 space-y-6">
           {filteredPurchases.length > 0 ? (
             filteredPurchases.map((purchase: any, index: number) => {
+              // Match payable: prefer invoice-number match; fall back to any unpaid payable for this supplier.
+              // This handles purchases registered without an invoice number.
               const payable = purchase.paymentMethod === 'CREDIT'
-                ? payables?.find((p: any) => p.supplierInvoiceReference === purchase.invoiceNumber)
+                ? (payables?.find((p: any) =>
+                    purchase.invoiceNumber
+                      ? p.supplierInvoiceReference === purchase.invoiceNumber
+                      : p.status !== 'PAID_IN_FULL'
+                  ) ?? null)
                 : null;
 
               return (

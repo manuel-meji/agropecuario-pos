@@ -21,6 +21,9 @@ public class AccountPayable {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // nullable for backwards compatibility with existing rows
+    private Long supplierId;
+
     @NotNull
     private String supplierName;
 

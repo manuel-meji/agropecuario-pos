@@ -28,6 +28,7 @@ export const createCategory = (category: any) => api.post('/categories', categor
 export const updateCategory = (id: number, category: any) => api.put(`/categories/${id}`, category).then(res => res.data);
 export const deleteCategory = (id: number) => api.delete(`/categories/${id}`).then(res => res.data);
 export const updateProduct = (id: number, product: any) => api.put(`/products/${id}`, product).then(res => res.data);
+export const deleteProduct = (id: number) => api.delete(`/products/${id}`).then(res => res.data);
 export const createSale = (saleData: any) => api.post('/sales', saleData).then(res => res.data);
 export const getSales = (startDate?: string, endDate?: string) =>
   api.get('/sales', { params: { startDate, endDate } }).then(res => res.data);
@@ -35,8 +36,12 @@ export const getSaleById = (id: number) => api.get(`/sales/${id}`).then(res => r
 export const deleteSale = (id: number, deleteData: { password: string }) => api.delete(`/sales/${id}`, { data: deleteData }).then(res => res.data);
 export const getClients = () => api.get('/clients').then(res => res.data);
 export const createClient = (client: any) => api.post('/clients', client).then(res => res.data);
+export const updateClient = (id: number, client: any) => api.put(`/clients/${id}`, client).then(res => res.data);
+export const deleteClient = (id: number) => api.delete(`/clients/${id}`).then(res => res.data);
 export const getSuppliers = () => api.get('/suppliers').then(res => res.data);
 export const createSupplier = (supplier: any) => api.post('/suppliers', supplier).then(res => res.data);
+export const updateSupplier = (id: number, supplier: any) => api.put(`/suppliers/${id}`, supplier).then(res => res.data);
+export const deleteSupplier = (id: number) => api.delete(`/suppliers/${id}`).then(res => res.data);
 export const getReceivables = () => api.get('/accounts-receivable').then(res => res.data);
 export const getReceivablesByClient = () => api.get('/accounts-receivable/by-client').then(res => res.data);
 export const getClientHistory = (clientName: string) => api.get(`/accounts-receivable/${encodeURIComponent(clientName)}/history`).then(res => res.data);
@@ -51,15 +56,17 @@ export const createPurchase = (purchaseData: any) => api.post('/purchases', purc
 
 // Accounts Payable (CxP)
 export const getPayables = () => api.get('/accounts-payable').then(res => res.data);
-export const getPayableHistory = (supplierName: string) => api.get(`/accounts-payable/${encodeURIComponent(supplierName)}/history`).then(res => res.data);
+/** Get all payables for a supplier by their immutable ID (survives name changes). */
+export const getPayableHistory = (supplierId: number) => api.get(`/accounts-payable/by-supplier/${supplierId}`).then(res => res.data);
 export const makePayablePayment = (id: number, amount: number) => api.post(`/accounts-payable/${id}/pay`, { amount }).then(res => res.data);
 export const getPayablePaymentRecords = async () => {
   const response = await api.get('/accounts-payable/payments');
   return response.data;
 };
 
-export const makeSupplierBulkPayment = async (supplierName: string, amount: number) => {
-  const response = await api.post(`/accounts-payable/supplier/${encodeURIComponent(supplierName)}/pay`, { amount });
+/** Bulk payment for a supplier using their immutable ID (survives name changes). */
+export const makeSupplierBulkPayment = async (supplierId: number, amount: number) => {
+  const response = await api.post(`/accounts-payable/by-supplier/${supplierId}/pay`, { amount });
   return response.data;
 };
 // Cash Closing

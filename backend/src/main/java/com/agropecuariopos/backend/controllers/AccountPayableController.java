@@ -14,12 +14,10 @@ import com.agropecuariopos.backend.models.DailyExpense;
 import com.agropecuariopos.backend.models.PayablePaymentRecord;
 import com.agropecuariopos.backend.repositories.DailyExpenseRepository;
 import com.agropecuariopos.backend.repositories.PayablePaymentRecordRepository;
-import org.springframework.data.domain.Sort;
 import org.springframework.transaction.annotation.Transactional;
 
 @RestController
 @RequestMapping("/api/accounts-payable")
-
 public class AccountPayableController {
 
     @Autowired
@@ -46,10 +44,19 @@ public class AccountPayableController {
         return accountPayableRepository.findBySupplierName(supplierName);
     }
 
+    /**
+     * New: get payables by supplier ID (immutable — survives name changes).
+     */
+    @GetMapping("/by-supplier/{supplierId}")
+    public List<AccountPayable> getPayablesBySupplierId(@PathVariable Long supplierId) {
+        return accountPayableRepository.findBySupplierId(supplierId);
+    }
+
     @GetMapping("/payments")
     public List<PayablePaymentRecord> getAllPayments() {
-        return paymentRecordRepository.findAll(org.springframework.data.domain.Sort
-                .by(org.springframework.data.domain.Sort.Direction.DESC, "paymentDate"));
+        return paymentRecordRepository.findAll(
+                org.springframework.data.domain.Sort.by(
+                        org.springframework.data.domain.Sort.Direction.DESC, "paymentDate"));
     }
 
     @PostMapping("/{id}/pay")
@@ -68,7 +75,7 @@ public class AccountPayableController {
         }
         AccountPayable saved = accountPayableRepository.save(payable);
 
-        // 1. Record the payment history
+        // Record the payment history
         PayablePaymentRecord record = new PayablePaymentRecord();
         record.setAccountPayable(saved);
         record.setAmount(paymentAmount);
@@ -77,26 +84,49 @@ public class AccountPayableController {
         record.setNewBalance(saved.getRemainingBalance());
         paymentRecordRepository.save(record);
 
-        // 2. Automatically create a daily expense (Gasto del Día)
+        // Automatically create a daily expense
         DailyExpense expense = new DailyExpense();
         expense.setAmount(paymentAmount);
         expense.setCategory(DailyExpense.ExpenseCategory.OTROS);
         expense.setDescription("Pago a Proveedor: " + saved.getSupplierName());
         expense.setIsDeductibleFromProfit(true);
+        expense.setRegisteredDate(LocalDateTime.now());
         dailyExpenseRepository.save(expense);
 
         return saved;
     }
 
+    /** Legacy: bulk payment by supplier name (kept for backwards compatibility). */
     @PostMapping("/supplier/{supplierName}/pay")
     @Transactional
     public List<AccountPayable> makeBulkPayment(@PathVariable String supplierName,
             @RequestBody PaymentRequest request) {
         List<AccountPayable> payables = accountPayableRepository.findBySupplierName(supplierName);
+        return processBulkPayment(payables, request.getAmount(), supplierName);
+    }
+
+    /**
+     * New: bulk payment by supplier ID (immutable — survives name changes).
+     */
+    @PostMapping("/by-supplier/{supplierId}/pay")
+    @Transactional
+    public List<AccountPayable> makeBulkPaymentBySupplierId(@PathVariable Long supplierId,
+            @RequestBody PaymentRequest request) {
+        List<AccountPayable> payables = accountPayableRepository.findBySupplierId(supplierId);
+        String supplierLabel = payables.isEmpty()
+                ? "Proveedor #" + supplierId
+                : payables.get(0).getSupplierName();
+        return processBulkPayment(payables, request.getAmount(), supplierLabel);
+    }
+
+    /** Shared logic: apply a bulk payment across a list of payables (oldest-first). */
+    private List<AccountPayable> processBulkPayment(List<AccountPayable> payables,
+            double amountDouble, String supplierLabel) {
+
         payables.sort((p1, p2) -> p1.getId().compareTo(p2.getId()));
 
-        BigDecimal remainingPayment = BigDecimal.valueOf(request.getAmount());
-        BigDecimal totalPaidInThisTransaction = BigDecimal.ZERO;
+        BigDecimal remainingPayment = BigDecimal.valueOf(amountDouble);
+        BigDecimal totalPaid = BigDecimal.ZERO;
 
         for (AccountPayable payable : payables) {
             if (remainingPayment.compareTo(BigDecimal.ZERO) <= 0)
@@ -108,7 +138,6 @@ public class AccountPayableController {
                 BigDecimal previousBalance = balance;
 
                 payable.setAmountPaid(payable.getAmountPaid().add(amountToApply));
-
                 if (payable.getRemainingBalance().compareTo(BigDecimal.ZERO) <= 0) {
                     payable.setStatus(AccountPayable.PayableStatus.PAID_IN_FULL);
                 } else {
@@ -116,7 +145,6 @@ public class AccountPayableController {
                 }
                 AccountPayable saved = accountPayableRepository.save(payable);
 
-                // 1. Record the payment history
                 PayablePaymentRecord record = new PayablePaymentRecord();
                 record.setAccountPayable(saved);
                 record.setAmount(amountToApply);
@@ -126,17 +154,18 @@ public class AccountPayableController {
                 paymentRecordRepository.save(record);
 
                 remainingPayment = remainingPayment.subtract(amountToApply);
-                totalPaidInThisTransaction = totalPaidInThisTransaction.add(amountToApply);
+                totalPaid = totalPaid.add(amountToApply);
             }
         }
 
-        // 2. Automatically create ONE daily expense
-        if (totalPaidInThisTransaction.compareTo(BigDecimal.ZERO) > 0) {
+        // Create one daily expense for the entire bulk payment
+        if (totalPaid.compareTo(BigDecimal.ZERO) > 0) {
             DailyExpense expense = new DailyExpense();
-            expense.setAmount(totalPaidInThisTransaction);
+            expense.setAmount(totalPaid);
             expense.setCategory(DailyExpense.ExpenseCategory.OTROS);
-            expense.setDescription("Pago a Proveedor: " + supplierName);
+            expense.setDescription("Pago a Proveedor: " + supplierLabel);
             expense.setIsDeductibleFromProfit(true);
+            expense.setRegisteredDate(LocalDateTime.now());
             dailyExpenseRepository.save(expense);
         }
 

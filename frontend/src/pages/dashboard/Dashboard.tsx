@@ -4,7 +4,7 @@ import {
   LineChart, Line, PieChart, Pie, Cell
 } from 'recharts';
 import {
-  TrendingUp, Banknote, Receipt, AlertTriangle, Download,
+  TrendingUp, Banknote, Receipt, AlertTriangle,
   ShoppingCart, TrendingDown, Package, Users, RefreshCw,
   ArrowUpRight, ArrowDownRight, CreditCard, Smartphone, Wallet, Banknote as BanknoteIcon
 } from 'lucide-react';
@@ -146,10 +146,6 @@ export default function Dashboard() {
             >
               <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
               <span className="hidden sm:inline">Actualizar</span>
-            </button>
-            <button className="premium-panel flex items-center gap-2 px-5 py-3 bg-white dark:bg-slate-900 border-none font-bold text-slate-700 dark:text-slate-200 hover:scale-105 transition-transform">
-              <Download size={16} />
-              <span className="hidden sm:inline">Reporte</span>
             </button>
             <button onClick={() => setIsCashClosingOpen(true)} className="btn-premium-emerald flex items-center justify-center gap-2">
               Cierre de Caja
