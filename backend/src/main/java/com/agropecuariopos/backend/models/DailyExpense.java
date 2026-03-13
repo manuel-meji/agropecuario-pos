@@ -31,6 +31,7 @@ public class DailyExpense {
 
     @NotNull
     @Enumerated(EnumType.STRING)
+    @Column(length = 50)
     private ExpenseCategory category;
 
     @NotNull
@@ -50,6 +51,6 @@ public class DailyExpense {
     private LocalDateTime registeredDate;
 
     public enum ExpenseCategory {
-        OPERATIONAL_UTILITIES, PAYROLL, LOGISTICS, MAINTENANCE, TAXES, MISCELLANEOUS, OTROS
+        OPERATIONAL_UTILITIES, PAYROLL, LOGISTICS, MAINTENANCE, TAXES, MISCELLANEOUS, OTROS, SUPPLIER_PAYMENT
     }
 }

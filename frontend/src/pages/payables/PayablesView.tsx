@@ -115,15 +115,8 @@ export default function PayablesView() {
 
   const getSupplierBalance = (supplier: any) => {
     return payables
-      .filter(p => {
-        // Prefer ID match (robust: survives name changes).
-        // Fall back to name only for legacy rows that pre-date the supplierId column
-        // (i.e. supplierId is null/undefined on the payable).
-        if (p.supplierId != null) {
-          return Number(p.supplierId) === Number(supplier.id);
-        }
-        return p.supplierName === supplier.name;
-      })
+      .filter(p => p.supplierId === supplier.id || 
+                   (p.supplierName && p.supplierName.toLowerCase() === supplier.name.toLowerCase()))
       .reduce((acc, curr) => acc + (curr.totalDebt - curr.amountPaid), 0);
   };
 

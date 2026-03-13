@@ -58,17 +58,14 @@ public class SupplierController {
         }
 
         // 2. Catch legacy payables that were only linked by name (Orphaned/Legacy case)
-        // If the name actually changed, find old matches and link them to the ID forever.
-        if (!oldName.equalsIgnoreCase(newName)) {
-            List<com.agropecuariopos.backend.models.AccountPayable> orphanedPayables =
-                    accountPayableRepository.findBySupplierName(oldName);
-            for (com.agropecuariopos.backend.models.AccountPayable orphaned : orphanedPayables) {
-                if (orphaned.getSupplierId() == null) {
-                    orphaned.setSupplierId(id);
-                    orphaned.setSupplierName(newName);
-                    accountPayableRepository.save(orphaned);
-                }
-            }
+        // We use IgnoreCase to be as robust as possible.
+        List<com.agropecuariopos.backend.models.AccountPayable> orphanedPayables =
+                accountPayableRepository.findBySupplierNameIgnoreCase(oldName);
+        for (com.agropecuariopos.backend.models.AccountPayable orphaned : orphanedPayables) {
+            // Link them to the ID if they weren't already (or update if they were)
+            orphaned.setSupplierId(id);
+            orphaned.setSupplierName(newName);
+            accountPayableRepository.save(orphaned);
         }
 
         return ResponseEntity.ok(updatedSupplier);

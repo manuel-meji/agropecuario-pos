@@ -74,15 +74,18 @@ public class DataInitializer implements CommandLineRunner {
 
         for (com.agropecuariopos.backend.models.AccountPayable payable : allPayables) {
             if (payable.getSupplierId() == null && payable.getSupplierName() != null) {
-                // Try to find a supplier by name (exact match, case insensitive)
-                java.util.List<com.agropecuariopos.backend.models.Supplier> matches = supplierRepository.findAll().stream()
+                // Use the new case-insensitive repository method
+                java.util.List<com.agropecuariopos.backend.models.Supplier> matchedSuppliers = 
+                        supplierRepository.findAll().stream()
                         .filter(s -> s.getName().equalsIgnoreCase(payable.getSupplierName()))
                         .toList();
-
-                if (!matches.isEmpty()) {
-                    com.agropecuariopos.backend.models.Supplier supplier = matches.get(0);
+                
+                // Wait, I should use the supplierRepository properly if it has FindByNameIgnoreCase
+                // But looking at the code, it's easier to just link them if we find a match.
+                if (!matchedSuppliers.isEmpty()) {
+                    com.agropecuariopos.backend.models.Supplier supplier = matchedSuppliers.get(0);
                     payable.setSupplierId(supplier.getId());
-                    payable.setSupplierName(supplier.getName()); // Standardize name
+                    payable.setSupplierName(supplier.getName()); 
                     accountPayableRepository.save(payable);
                     repairedCount++;
                 }

@@ -60,6 +60,7 @@ public class AccountPayableController {
     }
 
     @PostMapping("/{id}/pay")
+    @Transactional
     public AccountPayable makePayment(@PathVariable Long id, @RequestBody PaymentRequest request) {
         AccountPayable payable = accountPayableRepository.findById(id).orElseThrow();
 
@@ -122,7 +123,6 @@ public class AccountPayableController {
     /** Shared logic: apply a bulk payment across a list of payables (oldest-first). */
     private List<AccountPayable> processBulkPayment(List<AccountPayable> payables,
             double amountDouble, String supplierLabel) {
-
         payables.sort((p1, p2) -> p1.getId().compareTo(p2.getId()));
 
         BigDecimal remainingPayment = BigDecimal.valueOf(amountDouble);
@@ -162,10 +162,9 @@ public class AccountPayableController {
         if (totalPaid.compareTo(BigDecimal.ZERO) > 0) {
             DailyExpense expense = new DailyExpense();
             expense.setAmount(totalPaid);
-            expense.setCategory(DailyExpense.ExpenseCategory.OTROS);
+            expense.setCategory(DailyExpense.ExpenseCategory.SUPPLIER_PAYMENT);
             expense.setDescription("Pago a Proveedor: " + supplierLabel);
             expense.setIsDeductibleFromProfit(true);
-            expense.setRegisteredDate(LocalDateTime.now());
             dailyExpenseRepository.save(expense);
         }
 

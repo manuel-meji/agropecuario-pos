@@ -9,5 +9,6 @@ import java.util.List;
 @Repository
 public interface AccountPayableRepository extends JpaRepository<AccountPayable, Long> {
     List<AccountPayable> findBySupplierName(String supplierName);
+    List<AccountPayable> findBySupplierNameIgnoreCase(String supplierName);
     List<AccountPayable> findBySupplierId(Long supplierId);
 }
