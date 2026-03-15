@@ -11,7 +11,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import com.agropecuariopos.backend.dto.TaxReportResponse;
+import com.agropecuariopos.backend.models.SaleItem;
 
 @Service
 public class FinancialReportingService {
@@ -67,6 +71,66 @@ public class FinancialReportingService {
                 .totalDeductibleExpenses(totalDeductibleExpenses)
                 .netProfit(netProfit)
                 .netProfitMarginPercentage(netProfitMargin)
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public TaxReportResponse generateTaxReport(LocalDateTime startDate, LocalDateTime endDate) {
+        List<Sale> filteredSales = saleRepository.findByCreatedDateBetween(startDate, endDate);
+
+        BigDecimal totalSalesNet = BigDecimal.ZERO;
+        BigDecimal totalSalesGross = BigDecimal.ZERO;
+        BigDecimal totalTaxCollected = BigDecimal.ZERO;
+        Map<String, TaxReportResponse.TaxSummary> breakdown = new HashMap<>();
+
+        // Inicializar tasas comunes
+        String[] rates = {"0", "1", "2", "4", "8", "13"};
+        for (String r : rates) {
+            breakdown.put(r, new TaxReportResponse.TaxSummary(BigDecimal.ZERO, BigDecimal.ZERO));
+        }
+
+        for (Sale sale : filteredSales) {
+            if (sale.getStatus() == Sale.SaleStatus.CANCELLED) continue;
+
+            BigDecimal saleFinalTotal = sale.getFinalTotal() != null ? sale.getFinalTotal() : BigDecimal.ZERO;
+            BigDecimal saleTotalTax = sale.getTotalTax() != null ? sale.getTotalTax() : BigDecimal.ZERO;
+
+            totalSalesGross = totalSalesGross.add(saleFinalTotal);
+            totalTaxCollected = totalTaxCollected.add(saleTotalTax);
+            totalSalesNet = totalSalesNet.add(saleFinalTotal.subtract(saleTotalTax));
+
+            if (sale.getItems() != null) {
+                for (SaleItem item : sale.getItems()) {
+                    BigDecimal rateVal = (item.getProduct() != null && item.getProduct().getTaxRate() != null) 
+                                        ? item.getProduct().getTaxRate() : BigDecimal.ZERO;
+                    String rateKey = rateVal.stripTrailingZeros().toPlainString();
+                    
+                    TaxReportResponse.TaxSummary summary = breakdown.getOrDefault(rateKey, 
+                        new TaxReportResponse.TaxSummary(BigDecimal.ZERO, BigDecimal.ZERO));
+                    
+                    BigDecimal lineTotal = item.getLineTotal();
+                    if (lineTotal == null) {
+                        BigDecimal price = item.getUnitPriceAtSale() != null ? item.getUnitPriceAtSale() : BigDecimal.ZERO;
+                        lineTotal = price.multiply(new BigDecimal(item.getQuantity() != null ? item.getQuantity() : 0));
+                    }
+                    BigDecimal itemTax = item.getItemTax() != null ? item.getItemTax() : BigDecimal.ZERO;
+                    
+                    BigDecimal net = lineTotal.subtract(itemTax);
+                    summary.setNetAmount(summary.getNetAmount().add(net));
+                    summary.setTaxAmount(summary.getTaxAmount().add(itemTax));
+                    
+                    breakdown.put(rateKey, summary);
+                }
+            }
+        }
+
+        return TaxReportResponse.builder()
+                .startDate(startDate)
+                .endDate(endDate)
+                .totalSalesNet(totalSalesNet)
+                .totalSalesGross(totalSalesGross)
+                .totalTaxCollected(totalTaxCollected)
+                .taxBreakdown(breakdown)
                 .build();
     }
 }

@@ -14,6 +14,9 @@ import com.agropecuariopos.backend.repositories.ProductRepository;
 import com.agropecuariopos.backend.repositories.SaleRepository;
 import com.agropecuariopos.backend.dto.DeleteSaleRequest;
 import com.agropecuariopos.backend.security.UserDetailsImpl;
+import com.agropecuariopos.backend.models.ElectronicInvoice;
+import com.agropecuariopos.backend.repositories.ElectronicInvoiceRepository;
+import com.agropecuariopos.backend.services.email.InvoiceEmailService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -54,6 +57,12 @@ public class SaleController {
 
     @Autowired
     private com.agropecuariopos.backend.services.POSSaleService posSaleService;
+
+    @Autowired
+    private ElectronicInvoiceRepository electronicInvoiceRepository;
+
+    @Autowired
+    private InvoiceEmailService invoiceEmailService;
 
     @GetMapping
     public List<SaleResponse> getAllSales(
@@ -202,5 +211,24 @@ public class SaleController {
                 savedSale.getCreatedDate(),
                 "SALE",
                 saleCategories);
+    }
+
+    @PostMapping("/{id}/email-receipt")
+    public ResponseEntity<?> emailReceipt(@PathVariable Long id, @RequestBody java.util.Map<String, String> payload) {
+        try {
+            Sale sale = saleRepository.findById(id).orElseThrow(() -> new RuntimeException("Venta no encontrada"));
+            String pdfBase64 = payload.get("pdfBase64");
+            
+            if (sale.getClient() == null || sale.getClient().getEmail() == null || sale.getClient().getEmail().isEmpty()) {
+                return ResponseEntity.badRequest().body("El cliente no tiene un correo registrado.");
+            }
+
+            Optional<ElectronicInvoice> invoice = electronicInvoiceRepository.findBySaleId(sale.getId());
+            
+            invoiceEmailService.sendReceiptPdf(sale, sale.getClient().getEmail(), pdfBase64, invoice.orElse(null));
+            return ResponseEntity.ok("Correo enviado exitosamente.");
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Error al enviar el correo: " + e.getMessage());
+        }
     }
 }

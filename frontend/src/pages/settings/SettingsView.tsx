@@ -13,6 +13,8 @@ const DEFAULT_SETTINGS = {
   address: '',
   province: 'San José',
   currency: 'CRC',
+  printMode: 'browser',
+  printerName: '',
 };
 
 function loadSettings() {
@@ -257,17 +259,46 @@ export default function SettingsView() {
              )}
 
              {activeTab === 'hardware' && (
-                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6 max-w-3xl">
+                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6 max-w-4xl">
                    <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl p-4 flex gap-4">
                       <div className="p-2 bg-purple-100 dark:bg-purple-900/50 rounded-lg text-purple-600 dark:text-purple-400 h-fit">
                          <HardDrive size={24} />
                       </div>
                       <div>
-                         <h4 className="font-bold text-purple-900 dark:text-purple-300">Configuración de Hardware</h4>
-                         <p className="text-sm text-purple-700 dark:text-purple-400/80 mt-1">Configuración de impresoras, tiqueteras y dispositivos locales.</p>
+                         <h4 className="font-bold text-purple-900 dark:text-purple-300">Configuración de Hardware Local</h4>
+                         <p className="text-sm text-purple-700 dark:text-purple-400/80 mt-1">Configuración de impresoras térmicas ESC/POS (Ej. 3nStar de 58mm).</p>
                       </div>
                    </div>
-                   <p className="text-slate-500 dark:text-slate-400 text-sm">Módulo en desarrollo. Disponible en próxima versión.</p>
+
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                      <div className="space-y-2 md:col-span-2">
+                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Método de Impresión</label>
+                         <select
+                           className="w-full bg-slate-50 dark:bg-slate-800/50 border-none rounded-2xl px-5 py-4 text-slate-800 dark:text-white font-bold focus:ring-2 focus:ring-premium-emerald/20 outline-none transition-all appearance-none cursor-pointer"
+                           value={settings.printMode || 'browser'}
+                           onChange={e => handleChange('printMode', e.target.value)}
+                         >
+                            <option value="browser">Diálogo del Navegador (Normal, Vista Previa)</option>
+                            <option value="escpos">Impresión Silenciosa Backend (Recomendado para POS 58mm - Rápida)</option>
+                         </select>
+                      </div>
+
+                      {settings.printMode === 'escpos' && (
+                         <div className="space-y-2 md:col-span-2">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nombre de la Impresora Tiquetera en Windows</label>
+                            <input
+                              type="text"
+                              className="w-full bg-slate-50 dark:bg-slate-800/50 border-none rounded-2xl px-5 py-4 text-slate-800 dark:text-white font-bold focus:ring-2 focus:ring-premium-emerald/20 outline-none transition-all"
+                              placeholder="Ejemplo: 3nStar RPT001"
+                              value={settings.printerName || ''}
+                              onChange={e => handleChange('printerName', e.target.value)}
+                            />
+                            <p className="text-xs text-slate-500 font-medium px-2 mt-2">
+                              Debe ser el nombre EXACTO de la impresora instalada en las opciones de "Dispositivos e impresoras" de Windows. El backend de Java se encargará de enviar los comandos nativos de impresión.
+                            </p>
+                         </div>
+                      )}
+                   </div>
                 </motion.div>
              )}
 

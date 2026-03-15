@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, Filter, Plus, Package, AlertCircle, Edit3, Tag,
-  PackageCheck, Barcode, Trash2, Pencil, Check, X, ChevronDown, LayoutGrid
+  PackageCheck, Barcode, Trash2, Pencil, Check, X, ChevronDown, LayoutGrid, Minus
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -10,12 +10,15 @@ import {
   updateProduct, updateCategory, deleteCategory, deleteProduct
 } from '../../services/api';
 import ProfitCalculator from '../../components/ProfitCalculator';
+import CabysSearch from '../../components/CabysSearch';
 
 // ─── Searchable Category Select ────────────────────────────────────────────────
-function CategorySelect({ categories, value, onChange }: {
+function CategorySelect({ categories, value, onChange, onCreate, creating }: {
   categories: any[];
   value: string;
   onChange: (id: string) => void;
+  onCreate?: (name: string) => Promise<void>;
+  creating?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -141,7 +144,22 @@ function CategorySelect({ categories, value, onChange }: {
               >
                 -- Sin categoría --
               </button>
-              {filtered.length === 0 && (
+              {query.trim() !== '' && !categories.find(c => c.name.toLowerCase() === query.trim().toLowerCase()) && onCreate && (
+                <button
+                  type="button"
+                  disabled={creating}
+                  onClick={async () => {
+                    await onCreate(query.trim());
+                    setOpen(false);
+                    setQuery('');
+                  }}
+                  className="w-full text-left px-4 py-2.5 text-sm text-premium-emerald font-bold hover:bg-premium-emerald/10 transition-colors flex items-center justify-between"
+                >
+                  <span>Crear "{query.trim()}"</span>
+                  <Plus size={14} />
+                </button>
+              )}
+              {filtered.length === 0 && !onCreate && (
                 <p className="px-4 py-3 text-sm text-slate-400 text-center">Sin resultados</p>
               )}
               {filtered.map(c => (
@@ -386,6 +404,7 @@ export default function InventoryView() {
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [isCategoryPanelOpen, setIsCategoryPanelOpen] = useState(false);
   const [editingProductId, setEditingProductId] = useState<number | null>(null);
+  const [isCreatingInlineCat, setIsCreatingInlineCat] = useState(false);
 
   const [newProduct, setNewProduct] = useState({
     name: '', internalCode: '', cabysCode: '',
@@ -405,6 +424,24 @@ export default function InventoryView() {
   };
 
   useEffect(() => { loadData(); }, []);
+
+  const handleQuickCreateCategory = async (name: string) => {
+    setIsCreatingInlineCat(true);
+    try {
+      await createCategory({ name, description: '' });
+      const cats = await getCategories();
+      setCategories(cats);
+      const newCat = cats.find((c: any) => c.name.toLowerCase() === name.toLowerCase());
+      if (newCat) {
+        setNewProduct(prev => ({ ...prev, category: { id: newCat.id.toString() } }));
+      }
+      toast.success(`Categoría "${name}" creada y seleccionada`);
+    } catch (e) {
+      toast.error('Error al crear la categoría rápida');
+    } finally {
+      setIsCreatingInlineCat(false);
+    }
+  };
 
   const handleCreateProduct = async () => {
     if (!newProduct.name || !newProduct.cabysCode || !newProduct.category.id) {
@@ -428,9 +465,10 @@ export default function InventoryView() {
       setEditingProductId(null);
       setNewProduct({ name: '', internalCode: '', cabysCode: '', purchaseCost: 0, salePrice: 0, stockQuantity: 0, taxRate: 13, category: { id: '' } });
       loadData();
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      toast.error('Error validando datos o del servidor.');
+      const msg = error.response?.data?.message || error.response?.data || 'Error validando datos o del servidor.';
+      toast.error(typeof msg === 'string' ? msg : 'Error de validación');
     }
   };
 
@@ -443,6 +481,17 @@ export default function InventoryView() {
     } catch (error) {
       console.error(error);
       toast.error('No se pudo eliminar el producto. Revise si tiene ventas o compras asociadas.');
+    }
+  };
+
+  const handleQuickStockUpdate = async (product: any, delta: number) => {
+    try {
+      const newStock = Math.max(0, (product.stockQuantity || 0) + delta);
+      await updateProduct(product.id, { ...product, stockQuantity: newStock });
+      setProducts(prev => prev.map(p => p.id === product.id ? { ...p, stockQuantity: newStock } : p));
+      toast.success(`Stock actualizado: ${newStock}`);
+    } catch (error) {
+      toast.error('Error al actualizar stock');
     }
   };
 
@@ -581,9 +630,23 @@ export default function InventoryView() {
                       </span>
                     </td>
                     <td className="p-6 text-right">
-                      <span className={`text-lg font-black ${status === 'IN_STOCK' ? 'text-slate-900 dark:text-white' : status === 'LOW_STOCK' ? 'text-amber-500' : 'text-rose-500'}`}>
-                        {item.stockQuantity}
-                      </span>
+                      <div className="flex items-center justify-end gap-3">
+                        <button 
+                          onClick={() => handleQuickStockUpdate(item, -1)}
+                          className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 transition-colors"
+                        >
+                          <Minus size={14} />
+                        </button>
+                        <span className={`text-lg font-black min-w-[30px] text-center ${status === 'IN_STOCK' ? 'text-slate-900 dark:text-white' : status === 'LOW_STOCK' ? 'text-amber-500' : 'text-rose-500'}`}>
+                          {item.stockQuantity}
+                        </span>
+                        <button 
+                          onClick={() => handleQuickStockUpdate(item, 1)}
+                          className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 text-premium-emerald hover:bg-premium-emerald/10 transition-colors"
+                        >
+                          <Plus size={14} />
+                        </button>
+                      </div>
                     </td>
                     <td className="p-6 text-right">
                       <div className="flex flex-col items-end">
@@ -665,13 +728,21 @@ export default function InventoryView() {
                 <p className="text-slate-500 text-sm font-medium">Información técnica del artículo en almacén.</p>
               </div>
 
-              {/* ── Scrollable fields ── */}
+              {/* ── Scrollable fields & Form ── */}
+              <form onSubmit={e => { e.preventDefault(); handleCreateProduct(); }} className="flex flex-col flex-1 overflow-hidden">
               <div className="flex-1 overflow-y-auto custom-scrollbar px-10 pb-2 relative">
                 <div className="grid grid-cols-2 gap-4 pb-2">
                   <div className="col-span-2">
                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Descripción Comercial</label>
-                    <input type="text" placeholder="Ej. Fertilizante QPK 100 ml" className="premium-input w-full"
-                      value={newProduct.name} onChange={e => setNewProduct({ ...newProduct, name: e.target.value })} />
+                    <input 
+                      autoFocus
+                      type="text" 
+                      placeholder="Ej. Fertilizante QPK 100 ml" 
+                      className="premium-input w-full"
+                      value={newProduct.name} 
+                      onChange={e => setNewProduct({ ...newProduct, name: e.target.value })}
+                      onKeyDown={e => e.key === 'Enter' && handleCreateProduct()} 
+                    />
                   </div>
                   <div>
                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Código Interno / SKU</label>
@@ -680,8 +751,17 @@ export default function InventoryView() {
                   </div>
                   <div>
                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Código CABYS</label>
-                    <input type="text" placeholder="13 dígitos..." className="premium-input w-full"
-                      value={newProduct.cabysCode} onChange={e => setNewProduct({ ...newProduct, cabysCode: e.target.value })} />
+                    <CabysSearch
+                      value={newProduct.cabysCode}
+                      onChange={(code) => setNewProduct({ ...newProduct, cabysCode: code })}
+                      onCabysDetails={(taxRate, desc) => {
+                        setNewProduct((prev: any) => ({
+                          ...prev,
+                          taxRate,
+                          name: prev.name || desc // Pre-fill name if empty
+                        }));
+                      }}
+                    />
                   </div>
                   <div>
                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Costo Compra (₡)</label>
@@ -719,6 +799,8 @@ export default function InventoryView() {
                       categories={categories}
                       value={newProduct.category.id}
                       onChange={id => setNewProduct({ ...newProduct, category: { id } })}
+                      onCreate={handleQuickCreateCategory}
+                      creating={isCreatingInlineCat}
                     />
                   </div>
 
@@ -747,14 +829,15 @@ export default function InventoryView() {
 
               {/* ── Footer (fijo) ── */}
               <div className="px-10 py-6 shrink-0 border-t border-slate-100 dark:border-slate-800 flex gap-4">
-                <button onClick={() => setIsProductModalOpen(false)}
+                <button type="button" onClick={() => setIsProductModalOpen(false)}
                   className="flex-1 py-4 text-slate-500 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 rounded-2xl transition-colors">
                   Cancelar
                 </button>
-                <button onClick={handleCreateProduct} className="flex-1 btn-premium-emerald py-4">
+                <button type="submit" disabled={isCreatingInlineCat} className="flex-1 btn-premium-emerald py-4">
                   {editingProductId ? 'Aplicar Cambios' : 'Confirmar'}
                 </button>
               </div>
+              </form>
             </motion.div>
           </div>
         )}

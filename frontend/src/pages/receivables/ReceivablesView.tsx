@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Filter, FileText, CheckCircle2, Clock, DollarSign, ArrowLeft, History, User } from 'lucide-react';
-import { getReceivablesByClient, getClientHistory, makePayment, getPaymentRecords } from '../../services/api';
+import { getReceivablesByClient, getClientHistory, makePayment, getPaymentRecords, makeClientBulkPayment } from '../../services/api';
 import toast from 'react-hot-toast';
 
 export default function ReceivablesView() {
@@ -18,6 +18,7 @@ export default function ReceivablesView() {
   const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
   const [showPaymentHistoryModal, setShowPaymentHistoryModal] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [isBulkPaymentModalOpen, setIsBulkPaymentModalOpen] = useState(false);
 
   useEffect(() => {
     loadClients();
@@ -96,9 +97,37 @@ export default function ReceivablesView() {
         const history = await getClientHistory(selectedClient.clientName);
         setClientHistory(history);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error making payment", error);
-      toast.error("Error al registrar pago");
+      toast.error(error.response?.data?.message || error.response?.data || "Error al registrar pago");
+    }
+  };
+
+  const handleBulkPayment = async () => {
+    if (!paymentAmount || parseFloat(paymentAmount) <= 0) {
+      toast.error("Ingrese un monto válido");
+      return;
+    }
+    if (!selectedClient) return;
+    
+    try {
+      await makeClientBulkPayment(selectedClient.clientName, parseFloat(paymentAmount));
+      toast.success("Abono masivo registrado correctamente");
+      setIsBulkPaymentModalOpen(false);
+      setPaymentAmount('');
+      
+      const updatedClients = await loadClients();
+      if (updatedClients && updatedClients.length > 0) {
+        const updatedClient = updatedClients.find((c: any) => c.clientName === selectedClient.clientName);
+        if (updatedClient) {
+          setSelectedClient(updatedClient);
+        }
+      }
+      const history = await getClientHistory(selectedClient.clientName);
+      setClientHistory(history);
+    } catch (error: any) {
+      console.error("Error making bulk payment", error);
+      toast.error(error.response?.data?.message || error.response?.data || "Error al registrar abono masivo");
     }
   };
 
@@ -120,10 +149,6 @@ export default function ReceivablesView() {
                <button className="premium-panel flex items-center gap-2 px-6 py-3 bg-white dark:bg-slate-900 border-none font-bold text-slate-700 dark:text-slate-200 hover:scale-105 transition-transform">
                  <Filter size={18} />
                  <span>Filtros</span>
-               </button>
-               <button className="btn-premium-emerald flex items-center justify-center gap-2">
-                 <DollarSign size={18} />
-                 Abono Masivo
                </button>
             </div>
           </div>
@@ -196,8 +221,8 @@ export default function ReceivablesView() {
           </div>
         </>
       ) : (
-        <div className="flex flex-col gap-8 pb-10">
-          <div className="flex items-center justify-between">
+        <>
+          <div className="flex items-center justify-between shrink-0">
             <div className="flex items-center gap-6">
               <button
                 onClick={() => {
@@ -214,86 +239,135 @@ export default function ReceivablesView() {
               </div>
             </div>
             
-            <button
-               onClick={viewPaymentHistory} 
-               className="premium-panel bg-white dark:bg-slate-900 flex items-center gap-2 px-6 py-3 border-none font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
-            >
-               <History size={18} />
-               Ver Abonos Realizados
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[
-              { label: 'Deuda Consolidada', value: selectedClient?.totalDebtAmount, color: 'text-slate-900 dark:text-white', icon: FileText },
-              { label: 'Monto Recaudado', value: selectedClient?.totalPaidAmount, color: 'text-emerald-500', icon: CheckCircle2 },
-              { label: 'Saldo Neto', value: selectedClient?.totalRemainingBalance, color: 'text-rose-500', icon: Clock }
-            ].map((stat, i) => (
-              <div key={i} className="premium-panel p-8 flex justify-between items-center relative overflow-hidden group">
-                 <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-125 transition-transform duration-700">
-                    <stat.icon size={100} />
-                 </div>
-                 <div className="relative">
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">{stat.label}</p>
-                    <p className={`text-3xl font-black ${stat.color}`}>₡{stat.value?.toLocaleString()}</p>
-                 </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="premium-panel p-8">
-            <h3 className="text-xl font-bold mb-8 text-slate-900 dark:text-white">Historial de Compras</h3>
-            <div className="space-y-4">
-              {clientHistory.map((receivable, index) => (
-                <motion.div
-                  key={receivable.id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  className="bg-slate-50 dark:bg-slate-800/40 border border-black/5 dark:border-white/5 rounded-2xl p-6 flex flex-col md:flex-row justify-between items-center gap-6"
-                >
-                  <div className="flex items-center gap-4 flex-1">
-                     <div className="w-12 h-12 bg-white dark:bg-slate-900 rounded-xl flex items-center justify-center text-slate-400 shadow-sm">
-                        <FileText size={20} />
-                     </div>
-                     <div>
-                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{receivable.invoiceNumber}</p>
-                        <p className="font-bold text-slate-900 dark:text-white">Realizada el {receivable.saleDate ? new Date(receivable.saleDate).toLocaleDateString('es-CR') : 'N/A'}</p>
-                     </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-8 flex-1">
-                     <div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Monto Total</span>
-                        <span className="font-black text-slate-900 dark:text-white">₡{receivable.totalDebt?.toLocaleString()}</span>
-                     </div>
-                     <div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Saldo</span>
-                        <span className={`font-black ${receivable.remainingBalance > 0 ? 'text-rose-500' : 'text-emerald-500'}`}>₡{receivable.remainingBalance?.toLocaleString()}</span>
-                     </div>
-                     <div className="hidden md:block">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Vencimiento</span>
-                        <span className="font-bold text-slate-600 dark:text-slate-400">30 Mar 2026</span>
-                     </div>
-                  </div>
-
-                  <div className="flex items-center gap-4">
-                     {receivable.status === 'PAID_IN_FULL' ? (
-                       <span className="bg-emerald-500/10 text-emerald-500 px-4 py-2 rounded-xl text-xs font-bold border border-emerald-500/20">Liquidada</span>
-                     ) : (
-                       <button
-                         onClick={() => handlePaymentClick(receivable.id)}
-                         className="btn-premium-emerald py-2.5 px-6 shadow-sm text-sm"
-                       >
-                         Abonar
-                       </button>
-                     )}
-                  </div>
-                </motion.div>
-              ))}
+            <div className="flex gap-3">
+               <button
+                  onClick={() => {
+                     setPaymentAmount(selectedClient?.totalRemainingBalance?.toString() || '');
+                     setIsBulkPaymentModalOpen(true);
+                  }} 
+                  className="btn-premium-emerald flex items-center gap-2 px-6 py-3"
+               >
+                  <DollarSign size={18} />
+                  Pagar Todo / Abono Masivo
+               </button>
+               <button
+                  onClick={viewPaymentHistory} 
+                  className="premium-panel bg-white dark:bg-slate-900 flex items-center gap-2 px-6 py-3 border-none font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+               >
+                  <History size={18} />
+                  Ver Abonos Realizados
+               </button>
             </div>
           </div>
-        </div>
+
+          <div className="flex-1 overflow-y-auto custom-scrollbar pb-10 pr-2 flex flex-col gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 shrink-0">
+              {[
+                { label: 'Deuda Consolidada', value: selectedClient?.totalDebtAmount, color: 'text-slate-900 dark:text-white', icon: FileText },
+                { label: 'Monto Recaudado', value: selectedClient?.totalPaidAmount, color: 'text-emerald-500', icon: CheckCircle2 },
+                { label: 'Saldo Neto', value: selectedClient?.totalRemainingBalance, color: 'text-rose-500', icon: Clock }
+              ].map((stat, i) => (
+                <div key={i} className="premium-panel p-8 flex justify-between items-center relative overflow-hidden group">
+                   <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-125 transition-transform duration-700">
+                      <stat.icon size={100} />
+                   </div>
+                   <div className="relative">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">{stat.label}</p>
+                      <p className={`text-3xl font-black ${stat.color}`}>₡{stat.value?.toLocaleString()}</p>
+                   </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Progress Bar */}
+            <div className="premium-panel p-8 shrink-0">
+               <div className="flex justify-between items-end mb-4">
+                  <div>
+                     <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Progreso de Deuda</h4>
+                     <p className="text-xs text-slate-500 font-bold">Porcentaje del crédito que ha sido abonado.</p>
+                  </div>
+                  <span className="text-3xl font-black text-premium-emerald">
+                     {selectedClient?.totalDebtAmount > 0 
+                        ? Math.round((selectedClient.totalPaidAmount / selectedClient.totalDebtAmount) * 100) 
+                        : 0}%
+                  </span>
+               </div>
+               <div className="w-full h-6 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden shadow-inner">
+                  <div 
+                     className="h-full bg-premium-emerald transition-all duration-1000 relative overflow-hidden" 
+                     style={{ width: `${selectedClient?.totalDebtAmount > 0 ? (selectedClient.totalPaidAmount / selectedClient.totalDebtAmount) * 100 : 0}%` }}
+                  >
+                     <div className="absolute inset-0 bg-white/20 w-full h-full animate-pulse"></div>
+                  </div>
+               </div>
+            </div>
+
+            <div className="premium-panel p-8 flex-1 flex flex-col min-h-0">
+              <h3 className="text-xl font-bold mb-8 text-slate-900 dark:text-white shrink-0">Historial de Compras</h3>
+              <div className="space-y-4 overflow-y-auto custom-scrollbar flex-1 pr-2">
+                {clientHistory.map((receivable, index) => (
+                  <motion.div
+                    key={receivable.id}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    className="bg-slate-50 dark:bg-slate-800/40 border border-black/5 dark:border-white/5 rounded-2xl p-6 flex flex-col md:flex-row justify-between items-center gap-6 shrink-0"
+                  >
+                    <div className="flex items-center gap-4 flex-1">
+                       <div className="w-12 h-12 bg-white dark:bg-slate-900 rounded-xl flex items-center justify-center text-slate-400 shadow-sm">
+                          <FileText size={20} />
+                       </div>
+                       <div>
+                          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{receivable.invoiceNumber}</p>
+                          <p className="font-bold text-slate-900 dark:text-white">Realizada el {receivable.saleDate ? new Date(receivable.saleDate).toLocaleDateString('es-CR') : 'N/A'}</p>
+                       </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-8 flex-1">
+                       <div>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Monto Total</span>
+                          <span className="font-black text-slate-900 dark:text-white">₡{receivable.totalDebt?.toLocaleString()}</span>
+                       </div>
+                       <div>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Saldo</span>
+                          <span className={`font-black ${receivable.remainingBalance > 0 ? 'text-rose-500' : 'text-emerald-500'}`}>₡{receivable.remainingBalance?.toLocaleString()}</span>
+                       </div>
+                       <div className="hidden md:block">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Vencimiento</span>
+                          <span className="font-bold text-slate-600 dark:text-slate-400">30 Mar 2026</span>
+                       </div>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                       {receivable.status === 'PAID_IN_FULL' ? (
+                         <span className="bg-emerald-500/10 text-emerald-500 px-4 py-2 rounded-xl text-xs font-bold border border-emerald-500/20">Liquidada</span>
+                       ) : (
+                         <div className="flex gap-2">
+                           <button
+                             onClick={() => {
+                                setPaymentId(receivable.id);
+                                setPaymentAmount(receivable.remainingBalance?.toString() || '');
+                                setShowPaymentModal(true);
+                             }}
+                             className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-premium-emerald hover:text-premium-emerald py-2.5 px-4 rounded-xl font-bold transition-colors text-sm"
+                           >
+                             Pagar Todo
+                           </button>
+                           <button
+                             onClick={() => handlePaymentClick(receivable.id)}
+                             className="btn-premium-emerald py-2.5 px-6 shadow-sm text-sm"
+                           >
+                             Abonar
+                           </button>
+                         </div>
+                       )}
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
       {/* Modern MODAL: Payment */}
@@ -321,6 +395,38 @@ export default function ReceivablesView() {
                  <div className="flex gap-4">
                    <button onClick={() => setShowPaymentModal(false)} className="flex-1 py-4 text-slate-500 font-bold hover:bg-slate-50 dark:hover:bg-slate-800 rounded-2xl transition-colors">Cancelar</button>
                    <button onClick={handlePayment} className="flex-1 btn-premium-emerald py-4">Confirmar</button>
+                 </div>
+               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modern MODAL: Bulk Payment */}
+      <AnimatePresence>
+        {isBulkPaymentModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsBulkPaymentModalOpen(false)} className="absolute inset-0 bg-slate-950/60 backdrop-blur-md" />
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white dark:bg-slate-900 rounded-[40px] p-10 w-full max-w-md shadow-2xl relative z-10 overflow-hidden">
+               <div className="absolute top-[-50px] left-[-50px] w-48 h-48 bg-emerald-500/10 blur-[60px] rounded-full"></div>
+               <h3 className="text-2xl font-black mb-2 text-slate-900 dark:text-white relative">Abono Masivo</h3>
+               <p className="text-slate-500 text-sm mb-8 relative font-medium">Ingrese el monto para liquidar la deuda global del cliente.</p>
+               
+               <div className="space-y-6 relative">
+                 <div className="relative">
+                    <span className="absolute left-6 top-1/2 -translate-y-1/2 text-xl font-black text-slate-400">₡</span>
+                    <input
+                      type="number"
+                      placeholder="0.00"
+                      value={paymentAmount}
+                      onChange={(e) => setPaymentAmount(e.target.value)}
+                      className="w-full bg-slate-50 dark:bg-slate-950 border-2 border-transparent focus:border-premium-emerald rounded-2xl pl-12 pr-6 py-5 text-2xl font-black text-slate-900 dark:text-white transition-all outline-none"
+                      autoFocus
+                    />
+                 </div>
+                 <div className="flex gap-4">
+                   <button onClick={() => setIsBulkPaymentModalOpen(false)} className="flex-1 py-4 text-slate-500 font-bold hover:bg-slate-50 dark:hover:bg-slate-800 rounded-2xl transition-colors">Cancelar</button>
+                   <button onClick={handleBulkPayment} className="flex-1 btn-premium-emerald py-4">Confirmar</button>
                  </div>
                </div>
             </motion.div>

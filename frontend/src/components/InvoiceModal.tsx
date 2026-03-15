@@ -1,7 +1,13 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Download, CheckCircle, Building2, User, Calendar, Hash, CreditCard, Banknote, Smartphone, Wallet, ArrowUpRight } from 'lucide-react';
+import { X, Download, CheckCircle, Building2, User, Calendar, Hash, CreditCard, Banknote, Smartphone, Wallet, ArrowUpRight, Printer, Mail } from 'lucide-react';
 import { getCompanySettings } from '../utils/companySettings';
+import { Receipt } from './receipt/Receipt';
+import { useReactToPrint } from 'react-to-print';
+import { generateEscPosReceipt, printToEscPos } from '../utils/escposPrinter';
+import { generateTicketBase64 } from '../utils/pdfGenerator';
+import toast from 'react-hot-toast';
+import { sendReceiptEmail } from '../services/api';
 
 interface CartItem { product: any; qty: number }
 
@@ -57,8 +63,86 @@ export default function InvoiceModal({ isOpen, saleData, cart, client, change, o
 
   const subtotal = lineItems.reduce((a, i) => a + i.lineSubtotal, 0);
   const totalTax = lineItems.reduce((a, i) => a + i.lineTax, 0);
-  const discountAmt = saleData?.totalDiscount ?? 0;
-  const grandTotal = saleData?.finalTotal ?? (subtotal + totalTax - discountAmt);
+  const discountAmt = saleData?.totalDiscount ?? saleData?.discountAmount ?? 0;
+  const grandTotal = saleData?.finalTotal ?? saleData?.total ?? (subtotal + totalTax - discountAmt);
+
+  const receiptRef = useRef<HTMLDivElement>(null);
+  const [isSending, setIsSending] = useState(false);
+
+  // Print using react-to-print (browser fallback)
+  const handleBrowserPrint = useReactToPrint({
+    contentRef: receiptRef,
+  });
+
+  const handlePrint = async () => {
+    try {
+      const mode = company.printMode || 'browser';
+      if (mode === 'escpos' && company.printerName) {
+        toast.loading('Enviando a impresora...', { id: 'print' });
+        const text = generateEscPosReceipt(saleData, cart, client);
+        await printToEscPos(text, company.printerName);
+        toast.success('¡Impreso!', { id: 'print' });
+      } else {
+        handleBrowserPrint();
+      }
+    } catch (err) {
+      toast.error('Error al imprimir. Revisa la consola o configuración.', { id: 'print' });
+      console.error(err);
+    }
+  };
+
+  const handleSendEmail = async () => {
+    if (!client?.email) {
+      toast.error('El cliente no tiene un correo configurado.');
+      return;
+    }
+    
+    setIsSending(true);
+    const toastId = toast.loading('Generando PDF y enviando correo...');
+    try {
+      const pdfBase64 = generateTicketBase64(saleData, cart, client, company);
+      await sendReceiptEmail(saleData.id, pdfBase64);
+      toast.success('¡Correo enviado exitosamente!', { id: toastId });
+    } catch (e: any) {
+      toast.error('Error al enviar el correo: ' + (e?.response?.data || e.message), { id: toastId });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const receiptData = {
+      businessName: company.businessName || 'Mi Empresa',
+      sellerName: '',
+      businessId: company.legalId || '',
+      businessEmail: company.email,
+      businessPhone: company.phone,
+      businessAddress: company.address,
+      docType: saleData?.invoiceNumber ? 'Factura Electronica' : 'Tiquete de Venta',
+      date: new Date().toLocaleString('es-CR'),
+      clientName: client?.name || 'Consumidor Final',
+      clientId: client?.identification || '',
+      clientAddress: client?.address,
+      clientPhone: client?.phone,
+      clientEmail: client?.email,
+      invoiceNumber: saleData?.invoiceNumber || saleData?.id?.toString() || '',
+      consecutive: saleData?.consecutive || saleData?.invoiceNumber || '',
+      key: '',
+      sellerId: '',
+      invoiceCondition: 'Contado',
+      items: cart.map(i => ({
+         quantity: i.qty,
+         description: i.product.name,
+         unitPrice: i.product.salePrice,
+         total: i.product.salePrice * i.qty,
+         taxCode: (i.product.taxRate ?? 13) === 0 ? 'E' : `G${i.product.taxRate ?? 13}`
+      })),
+      subTotal: subtotal,
+      discount: discountAmt,
+      iva: totalTax,
+      total: grandTotal,
+      change: change || 0,
+      resolutionText: ''
+  };
 
   return (
     <AnimatePresence>
@@ -237,23 +321,44 @@ export default function InvoiceModal({ isOpen, saleData, cart, client, change, o
             </div>
 
             {/* ── Footer de acciones ── */}
-            <div className="px-8 py-5 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 shrink-0 flex gap-3">
+            <div className="px-8 py-5 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 shrink-0 flex gap-3 flex-wrap">
+              <button
+                onClick={handlePrint}
+                className="flex-[2] btn-premium-emerald py-3.5 flex items-center justify-center gap-2"
+              >
+                <Printer size={16} /> Imprimir Tiquete
+              </button>
+              
+              <button
+                onClick={handleSendEmail}
+                disabled={isSending || !client?.email}
+                className="flex-1 py-3.5 text-sm font-bold bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-2xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                <Mail size={16} /> {isSending ? 'Enviando...' : 'Enviar'}
+              </button>
+
+              <button
+                onClick={onDownloadPDF}
+                className="flex-[1.5] py-3.5 text-sm font-bold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-2xl transition-colors flex items-center justify-center gap-2"
+              >
+                <Download size={16} /> Descargar PDF
+              </button>
+
               <button
                 onClick={onClose}
                 className="flex-1 py-3.5 text-sm font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-2xl transition-colors"
               >
                 Cerrar
               </button>
-              <button
-                onClick={onDownloadPDF}
-                autoFocus
-                className="flex-1 btn-premium-emerald py-3.5 flex items-center justify-center gap-2"
-              >
-                <Download size={16} />
-                Descargar PDF
-                <kbd className="ml-1 text-[9px] bg-emerald-700/50 text-emerald-200 px-1.5 py-0.5 rounded font-black">↵</kbd>
-              </button>
             </div>
+            
+            {/* Hidden Receipt for PDF/Print */}
+            <div style={{ display: 'none' }}>
+                <div ref={receiptRef}>
+                    <Receipt data={receiptData} />
+                </div>
+            </div>
+
           </motion.div>
         </div>
       )}

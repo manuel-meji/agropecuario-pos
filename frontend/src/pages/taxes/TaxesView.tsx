@@ -1,100 +1,174 @@
-
-import { motion } from 'framer-motion';
-import { FileSpreadsheet, Download, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
-
-const DUMMY_TAXES = [
-  { id: 1, period: "Abril 2024", type: "IVA (D-104-2)", status: "PENDING", dueDate: "2024-05-15", amount: 1450000 },
-  { id: 2, period: "Marzo 2024", type: "IVA (D-104-2)", status: "SUBMITTED", dueDate: "2024-04-15", amount: 1320500 },
-  { id: 3, period: "Febrero 2024", type: "IVA (D-104-2)", status: "SUBMITTED", dueDate: "2024-03-15", amount: 1280000 },
-  { id: 4, period: "Periodo 2023", type: "Renta (D-101)", status: "SUBMITTED", dueDate: "2024-03-15", amount: 4500000 },
-];
+import { useState, useEffect } from 'react';
+import { FileSpreadsheet, Download, RefreshCw, Calendar, PieChart, CheckCircle } from 'lucide-react';
+import { getTaxReport } from '../../services/api';
+import toast from 'react-hot-toast';
 
 export default function TaxesView() {
+  const [report, setReport] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [dates, setDates] = useState({
+    start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+    end: new Date().toISOString().split('T')[0]
+  });
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      // Ajustar fechas para que incluyan todo el día
+      const start = `${dates.start}T00:00:00`;
+      const end = `${dates.end}T23:59:59`;
+      const data = await getTaxReport(start, end);
+      setReport(data);
+    } catch (e) {
+      toast.error("Error al cargar reporte tributario");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, [dates]);
+
+  const exportToCSV = () => {
+    if (!report) return;
+    const headers = ["Tasa (%)", "Base Imponible", "Monto Impuesto"];
+    const rows = Object.entries(report.taxBreakdown).map(([rate, data]: [string, any]) => [
+      rate + "%",
+      data.netAmount.toFixed(2),
+      data.taxAmount.toFixed(2)
+    ]);
+
+    const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute("download", `reporte_tributario_${dates.start}_a_${dates.end}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   return (
-    <div className="flex flex-col gap-6 w-full max-w-7xl mx-auto h-[calc(100vh-8rem)]">
-      {/* Encabezado Principal */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="flex flex-col gap-6 w-full max-w-7xl mx-auto p-4 md:p-8">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Módulo Tributario CR Version 4.4</h2>
-          <p className="text-gray-500 dark:text-gray-400">Gestión de declaraciones, facturación electrónica e IVA.</p>
+          <h2 className="text-3xl font-black text-slate-800 dark:text-white flex items-center gap-3">
+            <PieChart className="text-premium-emerald" size={32} />
+            Módulo Tributario
+          </h2>
+          <p className="text-slate-500 font-medium">Resumen consolidado de IVA por tasas</p>
         </div>
-        <div className="flex gap-2 w-full md:w-auto">
-          <button className="p-2 border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors flex items-center justify-center gap-2 flex-1 md:flex-none">
-            <Download size={18} />
-            XML Recibidos
-          </button>
-          <button className="liquid-btn-primary py-2 px-4 shadow-sm text-sm flex items-center justify-center gap-2 flex-1 md:flex-none">
-            <FileSpreadsheet size={18} />
-            Nueva Declaración
+        
+        <div className="flex flex-wrap items-center gap-3 bg-white dark:bg-slate-800 p-2 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
+          <div className="flex items-center gap-2 px-3 border-r border-slate-100 dark:border-slate-700">
+            <Calendar size={16} className="text-slate-400" />
+            <input 
+              type="date" 
+              className="bg-transparent border-none text-sm font-bold text-slate-700 dark:text-slate-200 outline-none"
+              value={dates.start}
+              onChange={e => setDates({...dates, start: e.target.value})}
+            />
+          </div>
+          <div className="flex items-center gap-2 px-3">
+            <input 
+              type="date" 
+              className="bg-transparent border-none text-sm font-bold text-slate-700 dark:text-slate-200 outline-none"
+              value={dates.end}
+              onChange={e => setDates({...dates, end: e.target.value})}
+            />
+          </div>
+          <button 
+            onClick={fetchData}
+            disabled={loading}
+            className="p-2 bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-white rounded-xl hover:bg-slate-100 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
           </button>
         </div>
       </div>
 
-      {/* Tarjetas de Resumen */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 shrink-0">
-        <div className="liquid-glass-panel p-5 border-l-4 border-agro-green flex flex-col gap-2">
-          <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Total IVA Cobrado (Mes)</span>
-          <span className="text-2xl font-bold dark:text-white">₡450,000</span>
-          <span className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-            +12% vs mes anterior
-          </span>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="premium-card bg-emerald-50/50 dark:bg-premium-emerald/5 border-emerald-100 dark:border-premium-emerald/20">
+          <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">Total IVA Recaudado</p>
+          <p className="text-3xl font-black text-emerald-700 dark:text-premium-emerald">
+            ₡{report?.totalTaxCollected?.toLocaleString() || '0'}
+          </p>
+          <div className="mt-4 pt-4 border-t border-emerald-100 dark:border-premium-emerald/10 flex items-center gap-2 text-[10px] font-bold text-emerald-600/60 uppercase">
+            <CheckCircle size={12} /> Basado en ventas completadas
+          </div>
         </div>
-        <div className="liquid-glass-panel p-5 border-l-4 border-amber-500 flex flex-col gap-2">
-          <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Total IVA Pagado (Mes)</span>
-          <span className="text-2xl font-bold dark:text-white">₡210,000</span>
-          <span className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
-            Sujeto a validación CR
-          </span>
+
+        <div className="premium-card">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Base Imponible (Ventas Netas)</p>
+          <p className="text-3xl font-black text-slate-800 dark:text-white">
+            ₡{report?.totalSalesNet?.toLocaleString() || '0'}
+          </p>
+          <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700 flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase">
+            <RefreshCw size={12} /> Actualizado en tiempo real
+          </div>
         </div>
-        <div className="liquid-glass-panel p-5 border-l-4 border-blue-500 flex flex-col gap-2">
-          <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Saldo a Favor (Proyectado)</span>
-          <span className="text-2xl font-bold text-blue-600 dark:text-blue-400">₡0</span>
+
+        <div className="premium-card">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Ventas Brutas Totales</p>
+          <p className="text-3xl font-black text-slate-800 dark:text-white">
+            ₡{report?.totalSalesGross?.toLocaleString() || '0'}
+          </p>
+          <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700 flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase">
+            <FileSpreadsheet size={12} /> Incluye impuestos
+          </div>
         </div>
       </div>
 
-      {/* Tabla Principal Animada */}
-      <div className="liquid-glass-panel flex-1 overflow-hidden flex flex-col">
-        <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-black/5 dark:bg-white/5">
-          <h3 className="font-semibold text-gray-800 dark:text-gray-200">Historial de Declaraciones Tributarias</h3>
+      <div className="premium-panel overflow-hidden">
+        <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+          <h3 className="font-bold text-slate-800 dark:text-white">Desglose por Tasa de Impuesto</h3>
+          <div className="flex gap-2">
+            <button 
+              onClick={exportToCSV}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl text-sm font-bold hover:scale-105 transition-transform"
+            >
+              <Download size={16} /> Exportar CSV
+            </button>
+          </div>
         </div>
-        <div className="overflow-x-auto custom-scrollbar flex-1">
-          <table className="w-full text-left border-collapse">
+        
+        <div className="overflow-x-auto">
+          <table className="w-full">
             <thead>
-              <tr className="bg-black/5 dark:bg-white/5 border-b border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400 text-sm">
-                <th className="p-4 font-semibold w-32">Estado</th>
-                <th className="p-4 font-semibold">Periodo</th>
-                <th className="p-4 font-semibold">Tipo Declaración</th>
-                <th className="p-4 font-semibold">Vencimiento</th>
-                <th className="p-4 font-semibold text-right">Monto Declarado (CRC)</th>
+              <tr className="bg-slate-50 dark:bg-slate-900/50 text-left">
+                <th className="p-4 text-[10px] font-black uppercase text-slate-400">Tasa IVA</th>
+                <th className="p-4 text-[10px] font-black uppercase text-slate-400">Concepto</th>
+                <th className="p-4 text-[10px] font-black uppercase text-slate-400 text-right">Base Imponible</th>
+                <th className="p-4 text-[10px] font-black uppercase text-slate-400 text-right">IVA Recaudado</th>
               </tr>
             </thead>
-            <tbody>
-              {DUMMY_TAXES.map((item, index) => (
-                <motion.tr 
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  key={item.id} 
-                  className="border-b border-gray-100 dark:border-gray-800/50 hover:bg-white/40 dark:hover:bg-gray-800/40 transition-colors group cursor-pointer"
-                >
+            <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
+              {report && Object.entries(report.taxBreakdown).filter(([_, data]: [any, any]) => data.netAmount > 0 || data.taxAmount > 0).map(([rate, data]: [string, any]) => (
+                <tr key={rate} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
                   <td className="p-4">
-                    {item.status === 'PENDING' && <span className="inline-flex items-center gap-1.5 py-1 px-2.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border border-amber-200 dark:border-amber-800"><Clock size={12}/> Pendiente</span>}
-                    {item.status === 'SUBMITTED' && <span className="inline-flex items-center gap-1.5 py-1 px-2.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"><CheckCircle size={12}/> Presentado</span>}
-                    {item.status === 'OVERDUE' && <span className="inline-flex items-center gap-1.5 py-1 px-2.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 border border-red-200 dark:border-red-800"><AlertTriangle size={12}/> Atrasado</span>}
-                  </td>
-                  <td className="p-4 font-medium text-gray-800 dark:text-gray-200">{item.period}</td>
-                  <td className="p-4 text-gray-600 dark:text-gray-400">
-                    <span className="py-1 px-2.5 rounded-md bg-gray-100 dark:bg-gray-800 text-xs text-gray-600 dark:text-gray-300">
-                      {item.type}
+                    <span className="px-2 py-1 bg-premium-emerald/10 text-premium-emerald rounded-lg text-xs font-black">
+                      {rate}%
                     </span>
                   </td>
-                  <td className="p-4 text-gray-600 dark:text-gray-400">{item.dueDate}</td>
-                  <td className="p-4 font-bold text-gray-900 dark:text-white text-right">
-                    ₡{item.amount.toLocaleString()}
+                  <td className="p-4 text-sm font-bold text-slate-700 dark:text-slate-200">
+                    {rate === "0" ? "Ventas Exentas" : rate === "1" ? "Canasta Básica / Insumos" : rate === "4" ? "Servicios de Salud / Otros" : "Tasa Estándar"}
                   </td>
-                </motion.tr>
+                  <td className="p-4 text-sm font-bold text-slate-700 dark:text-slate-200 text-right">
+                    ₡{data.netAmount.toLocaleString()}
+                  </td>
+                  <td className="p-4 text-sm font-black text-premium-emerald text-right">
+                    ₡{data.taxAmount.toLocaleString()}
+                  </td>
+                </tr>
               ))}
+              {(!report || Object.values(report.taxBreakdown).every((d: any) => d.netAmount === 0)) && !loading && (
+                <tr>
+                  <td colSpan={4} className="p-12 text-center text-slate-400 font-medium italic">
+                    No hay ventas registradas en el periodo seleccionado.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

@@ -9,4 +9,5 @@ import java.util.Optional;
 @Repository
 public interface CabysRepository extends JpaRepository<Cabys, Integer> {
     Optional<Cabys> findByCabysCode(String cabysCode);
+    java.util.List<Cabys> findTop50ByDescriptionContainingIgnoreCaseOrCabysCodeContainingIgnoreCase(String description, String cabysCode);
 }

@@ -132,19 +132,23 @@ public class POSSaleService {
             // ——— Facturación Electrónica Hacienda (ASÍNCRONO) ———
             // Se ejecuta en hilo separado DESPUÉS del commit de la venta.
             // Registramos un Callback para que el hilo asíncrono se inicie SÓLO cuando la base de datos realmente guarde la venta.
-            if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
-                org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
-                    new org.springframework.transaction.support.TransactionSynchronization() {
-                        @Override
-                        public void afterCommit() {
-                            haciendaInvoiceService.emitirComprobanteAsync(savedSale.getId());
+            if (Boolean.TRUE.equals(request.getGenerateElectronicInvoice())) {
+                if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+                    org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                        new org.springframework.transaction.support.TransactionSynchronization() {
+                            @Override
+                            public void afterCommit() {
+                                haciendaInvoiceService.emitirComprobanteAsync(savedSale.getId());
+                            }
                         }
-                    }
-                );
+                    );
+                } else {
+                    haciendaInvoiceService.emitirComprobanteAsync(savedSale.getId());
+                }
+                logger.info("Emisión de comprobante electrónico encolada (post-commit) para venta {}", savedSale.getId());
             } else {
-                haciendaInvoiceService.emitirComprobanteAsync(savedSale.getId());
+                logger.info("Venta {} guardada. No se solicitó factura electrónica.", savedSale.getId());
             }
-            logger.info("Emisión de comprobante electrónico encolada (post-commit) para venta {}", savedSale.getId());
 
             return savedSale;
 

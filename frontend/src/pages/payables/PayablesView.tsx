@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Plus, Building2, X, ChevronDown, Phone, Mail, Hash, History, FileText, ShoppingCart, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getSuppliers, getPurchasesBySupplier, getPayables, getProducts, createPurchase, createProduct, getPayableHistory, makePayablePayment, makeSupplierBulkPayment } from '../../services/api';
+import { getSuppliers, getPurchasesBySupplier, getPayables, getProducts, getCategories, createPurchase, createProduct, getPayableHistory, makePayablePayment, makeSupplierBulkPayment } from '../../services/api';
+import CabysSearch from '../../components/CabysSearch';
 
 export default function PayablesView() {
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [payables, setPayables] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isTransactionOpen, setIsTransactionOpen] = useState(false);
@@ -32,14 +34,16 @@ export default function PayablesView() {
 
   const loadData = async () => {
     try {
-      const [suppliersData, payablesData, productsData] = await Promise.all([
+      const [suppliersData, payablesData, productsData, categoriesData] = await Promise.all([
         getSuppliers(),
         getPayables(),
-        getProducts()
+        getProducts(),
+        getCategories()
       ]);
       setSuppliers(suppliersData);
       setPayables(payablesData);
       setProducts(productsData);
+      setCategories(categoriesData);
     } catch (error) {
       console.error(error);
       toast.error('Error al cargar la información.');
@@ -282,6 +286,7 @@ export default function PayablesView() {
             onClose={() => setIsTransactionOpen(false)}
             suppliers={suppliers}
             products={products}
+            categories={categories}
             onSuccess={loadData}
           />
         )}
@@ -331,6 +336,9 @@ function HistoryModal({ onClose, supplier, purchases, payables, onPaymentClick, 
     return pd >= sDate && pd <= eDate;
   });
 
+  // Keep track of processed payables to handle duplicate empty invoice references safely
+  const processedPayableIds = new Set();
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-6 text-left">
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="absolute inset-0 bg-slate-950/60 backdrop-blur-md" />
@@ -360,13 +368,17 @@ function HistoryModal({ onClose, supplier, purchases, payables, onPaymentClick, 
             filteredPurchases.map((purchase: any, index: number) => {
               // Match payable: prefer invoice-number match; fall back to any unpaid payable for this supplier.
               // This handles purchases registered without an invoice number.
-              const payable = purchase.paymentMethod === 'CREDIT'
-                ? (payables?.find((p: any) =>
-                    purchase.invoiceNumber
-                      ? p.supplierInvoiceReference === purchase.invoiceNumber
-                      : p.status !== 'PAID_IN_FULL'
-                  ) ?? null)
-                : null;
+              let payable = null;
+              if (purchase.paymentMethod === 'CREDIT' && payables) {
+                payable = payables.find((p: any) => {
+                  if (processedPayableIds.has(p.id)) return false;
+                  if (purchase.invoiceNumber) return p.supplierInvoiceReference === purchase.invoiceNumber;
+                  return true;
+                });
+                if (payable) {
+                  processedPayableIds.add(payable.id);
+                }
+              }
 
               return (
                 <div key={purchase.id} className="premium-panel border-slate-100 dark:border-slate-800 overflow-hidden flex flex-col">
@@ -391,12 +403,17 @@ function HistoryModal({ onClose, supplier, purchases, payables, onPaymentClick, 
 
                         {/* Abonar Button specifically for debts */}
                         {payable && payable.status !== 'PAID_IN_FULL' && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); onPaymentClick(payable.id); }}
-                            className="btn-premium-emerald py-2 px-4 shadow-sm text-xs"
-                          >
-                            Abonar
-                          </button>
+                          <div className="flex flex-col items-end gap-1">
+                            <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest bg-rose-50 dark:bg-rose-900/30 px-2 py-0.5 rounded-full border border-rose-100 dark:border-rose-900">
+                              Restante: ₡{(payable.totalDebt - payable.amountPaid).toLocaleString()}
+                            </span>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); onPaymentClick(payable.id); }}
+                              className="btn-premium-emerald py-1 px-4 shadow-sm text-xs mt-1"
+                            >
+                              Abonar a Factura
+                            </button>
+                          </div>
                         )}
                         {payable && payable.status === 'PAID_IN_FULL' && (
                           <span className="bg-emerald-500/10 text-emerald-500 px-3 py-1.5 rounded-xl text-[10px] font-bold border border-emerald-500/20">Pagado</span>
@@ -452,20 +469,21 @@ function HistoryModal({ onClose, supplier, purchases, payables, onPaymentClick, 
   );
 }
 
-function TransactionModal({ onClose, suppliers, products, onSuccess }: any) {
+function TransactionModal({ onClose, suppliers, products, categories, onSuccess }: any) {
   const [step, setStep] = useState(1);
   const [supplierId, setSupplierId] = useState<number | string>('');
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [description, setDescription] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('CASH');
   const [cart, setCart] = useState<any[]>([]);
+  const [manualTotal, setManualTotal] = useState<number | ''>('');
   const [productSearch, setProductSearch] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   // New Product Creation States
   const [isCreatingProduct, setIsCreatingProduct] = useState(false);
   const [newProduct, setNewProduct] = useState({
-    name: '', internalCode: '', purchaseCost: 0, salePrice: 0, stockQuantity: 0, taxRate: 13
+    name: '', internalCode: '', cabysCode: '', purchaseCost: 0, salePrice: 0, stockQuantity: 0, taxRate: 13, category: { id: '' }
   });
   const [saveToInventory, setSaveToInventory] = useState(true);
 
@@ -498,13 +516,17 @@ function TransactionModal({ onClose, suppliers, products, onSuccess }: any) {
       toast.error('El nombre y el costo son requeridos.');
       return;
     }
+    if (saveToInventory && (!newProduct.cabysCode || !newProduct.category.id)) {
+      toast.error('Para guardar en inventario, el CABYS y la Categoría son requeridos.');
+      return;
+    }
 
     try {
       let createdProduct;
       if (saveToInventory) {
         createdProduct = await createProduct({
           ...newProduct,
-          taxRate: 13,
+          category: { id: parseInt(newProduct.category.id) },
           isAgrochemicalInsufficiency: false, // Default rules
           stockQuantity: 0 // Will increment via the purchase automatically
         });
@@ -518,11 +540,12 @@ function TransactionModal({ onClose, suppliers, products, onSuccess }: any) {
       }
       addToCart(createdProduct);
       setIsCreatingProduct(false);
-      setNewProduct({ name: '', internalCode: '', purchaseCost: 0, salePrice: 0, stockQuantity: 0, taxRate: 13 });
+      setNewProduct({ name: '', internalCode: '', cabysCode: '', purchaseCost: 0, salePrice: 0, stockQuantity: 0, taxRate: 13, category: { id: '' } });
       toast.success(saveToInventory ? 'Producto creado exitosamente' : 'Producto temporal agregado a la compra');
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      toast.error('Error al crear el producto.');
+      const msg = error.response?.data?.message || 'Error al crear el producto.';
+      toast.error(typeof msg === 'string' ? msg : 'Error de validación');
     }
   };
 
@@ -534,11 +557,16 @@ function TransactionModal({ onClose, suppliers, products, onSuccess }: any) {
     setCart(cart.map(item => item.productId === productId ? { ...item, [field]: value } : item));
   };
 
-  const total = cart.reduce((acc, curr) => acc + (curr.quantity * curr.costPrice), 0);
+  const total = cart.length > 0
+    ? cart.reduce((acc, curr) => acc + (curr.quantity * curr.costPrice), 0)
+    : Number(manualTotal || 0);
 
   const handleSubmit = async () => {
-    if (!supplierId && supplierId !== 0) { toast.error('Selecciona un proveedor.'); return; }
-    if (cart.length === 0) { toast.error('Añade al menos un producto.'); return; }
+    if (!supplierId && supplierId !== 'GENERIC') { toast.error('Selecciona un proveedor.'); return; }
+    if (cart.length === 0 && (!manualTotal || Number(manualTotal) <= 0)) {
+      toast.error('Añade al menos un producto o un monto total válido.');
+      return;
+    }
 
     try {
       await createPurchase({
@@ -547,11 +575,11 @@ function TransactionModal({ onClose, suppliers, products, onSuccess }: any) {
         description,
         paymentMethod,
         totalAmount: total,
-        items: cart.map(item => ({
+        items: cart.length > 0 ? cart.map(item => ({
           productId: item.productId,
           quantity: item.quantity,
           costPrice: item.costPrice
-        }))
+        })) : [] // Send empty items if no products added
       });
       toast.success('Compra registrada exitosamente.');
       onSuccess();
@@ -650,6 +678,50 @@ function TransactionModal({ onClose, suppliers, products, onSuccess }: any) {
                         <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Código Int. (Opcional)</label>
                         <input type="text" className="premium-input w-full py-2 px-3 text-sm" value={newProduct.internalCode} onChange={e => setNewProduct({ ...newProduct, internalCode: e.target.value })} placeholder="Ej. FERT-001" />
                       </div>
+                      {saveToInventory && (
+                        <>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Categoría</label>
+                            <select
+                              className="premium-input w-full py-2 px-3 text-sm"
+                              value={newProduct.category?.id || ''}
+                              onChange={e => setNewProduct({ ...newProduct, category: { id: e.target.value } })}
+                            >
+                              <option value="">Seleccione...</option>
+                              {categories.map((c: any) => (
+                                <option key={c.id} value={c.id}>{c.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">CABYS</label>
+                            <CabysSearch
+                              value={newProduct.cabysCode}
+                              onChange={(code) => setNewProduct({ ...newProduct, cabysCode: code })}
+                              onCabysDetails={(taxRate, desc) => {
+                                setNewProduct((prev: any) => ({
+                                  ...prev,
+                                  taxRate,
+                                  name: prev.name || desc // Pre-fill name if empty
+                                }));
+                              }}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Precio de Venta Vía Rápida (₡)</label>
+                            <input type="number" className="premium-input w-full py-2 px-3 text-sm" value={newProduct.salePrice || ''} onChange={e => setNewProduct({ ...newProduct, salePrice: Number(e.target.value) })} placeholder="Ej. 6500" />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Impuesto a Aplicar (%)</label>
+                            <select className="premium-input w-full py-2 px-3 text-sm" value={newProduct.taxRate} onChange={e => setNewProduct({ ...newProduct, taxRate: Number(e.target.value) })}>
+                              <option value={0}>0% Exento</option>
+                              <option value={1}>1% Agropecuario</option>
+                              <option value={4}>4% Reducido</option>
+                              <option value={13}>13% Estándar</option>
+                            </select>
+                          </div>
+                        </>
+                      )}
                       <div className="col-span-2 mt-2">
                         <label className="flex items-center gap-3 cursor-pointer">
                           <input
@@ -752,6 +824,7 @@ function TransactionModal({ onClose, suppliers, products, onSuccess }: any) {
                   <div className="p-10 text-center text-slate-400 border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-3xl">
                     <ShoppingCart size={32} className="mx-auto mb-2 opacity-20" />
                     <p className="font-bold text-sm">El carrito está vacío</p>
+                    <p className="text-xs mt-1">Si no agregas artículos, puedes justificar el gasto ingresando el total manualmente abajo.</p>
                   </div>
                 )}
               </div>
@@ -762,7 +835,21 @@ function TransactionModal({ onClose, suppliers, products, onSuccess }: any) {
         <div className="mt-8 pt-8 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between relative">
           <div>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Monto Total</p>
-            <p className="text-2xl font-black text-slate-900 dark:text-white">₡{total.toLocaleString()}</p>
+            {cart.length > 0 ? (
+              <p className="text-2xl font-black text-slate-900 dark:text-white">₡{total.toLocaleString()}</p>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-2xl font-black text-slate-400">₡</span>
+                <input
+                  type="number"
+                  placeholder="0.00"
+                  className="bg-transparent border-b-2 border-slate-200 dark:border-slate-700 focus:border-premium-emerald text-2xl font-black text-slate-900 dark:text-white outline-none w-32"
+                  value={manualTotal}
+                  onChange={(e) => setManualTotal(Number(e.target.value) || '')}
+                  disabled={step === 1}
+                />
+              </div>
+            )}
           </div>
           <div className="flex gap-4">
             {step === 1 ? (

@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import {
   TrendingUp, Banknote, Receipt, AlertTriangle,
-  ShoppingCart, TrendingDown, Package, Users, RefreshCw,
+  ShoppingCart, Package, RefreshCw,
   ArrowUpRight, ArrowDownRight, CreditCard, Smartphone, Wallet, Banknote as BanknoteIcon
 } from 'lucide-react';
 import { motion } from 'framer-motion';

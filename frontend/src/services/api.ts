@@ -34,6 +34,7 @@ export const getSales = (startDate?: string, endDate?: string) =>
   api.get('/sales', { params: { startDate, endDate } }).then(res => res.data);
 export const getSaleById = (id: number) => api.get(`/sales/${id}`).then(res => res.data);
 export const deleteSale = (id: number, deleteData: { password: string }) => api.delete(`/sales/${id}`, { data: deleteData }).then(res => res.data);
+export const sendReceiptEmail = (id: number, pdfBase64: string) => api.post(`/sales/${id}/email-receipt`, { pdfBase64 }).then(res => res.data);
 export const getClients = () => api.get('/clients').then(res => res.data);
 export const createClient = (client: any) => api.post('/clients', client).then(res => res.data);
 export const updateClient = (id: number, client: any) => api.put(`/clients/${id}`, client).then(res => res.data);
@@ -48,6 +49,7 @@ export const getClientHistory = (clientName: string) => api.get(`/accounts-recei
 export const getClientHistoryByClientId = (clientId: number) => api.get(`/clients/${clientId}/history`).then(res => res.data);
 export const makePayment = (id: number, amount: number) => api.post(`/accounts-receivable/${id}/pay`, { amount }).then(res => res.data);
 export const getPaymentRecords = () => api.get('/accounts-receivable/payments').then(res => res.data);
+export const makeClientBulkPayment = (clientName: string, amount: number) => api.post(`/accounts-receivable/client/${encodeURIComponent(clientName)}/pay`, { amount }).then(res => res.data);
 
 // Purchases
 export const getPurchases = () => api.get('/purchases').then(res => res.data);
@@ -58,7 +60,12 @@ export const createPurchase = (purchaseData: any) => api.post('/purchases', purc
 export const getPayables = () => api.get('/accounts-payable').then(res => res.data);
 /** Get all payables for a supplier by their immutable ID (survives name changes). */
 export const getPayableHistory = (supplierId: number) => api.get(`/accounts-payable/by-supplier/${supplierId}`).then(res => res.data);
+export const getSupplierHistory = (supplierId: number) => api.get(`/suppliers/${supplierId}/history`).then(res => res.data);
 export const makePayablePayment = (id: number, amount: number) => api.post(`/accounts-payable/${id}/pay`, { amount }).then(res => res.data);
+// CABYS
+export const getCabysSearch = (query: string) => api.get('/cabys/search', { params: { query } }).then(res => res.data);
+export const getCabysByCode = (code: string) => api.get(`/cabys/${code}`).then(res => res.data);
+
 export const getPayablePaymentRecords = async () => {
   const response = await api.get('/accounts-payable/payments');
   return response.data;
@@ -73,6 +80,10 @@ export const makeSupplierBulkPayment = async (supplierId: number, amount: number
 export const getCashClosingPreview = () => api.get('/cash-closing/preview').then(res => res.data);
 export const createCashClosing = (notes?: string) => api.post('/cash-closing', null, { params: { notes } }).then(res => res.data);
 export const getCashClosingHistory = () => api.get('/cash-closing').then(res => res.data);
+
+// Reports
+export const getTaxReport = (startDate: string, endDate: string) => 
+  api.get('/reports/tax', { params: { startDate, endDate } }).then(res => res.data);
 
 export default api;
 

@@ -9,6 +9,8 @@ export interface CompanySettings {
   address: string;
   province: string;
   currency: string;
+  printMode?: 'browser' | 'escpos';
+  printerName?: string;
 }
 
 const DEFAULTS: CompanySettings = {
@@ -19,6 +21,8 @@ const DEFAULTS: CompanySettings = {
   address: '',
   province: 'San José',
   currency: 'CRC',
+  printMode: 'browser',
+  printerName: '',
 };
 
 /** Lee la configuración de empresa desde localStorage.

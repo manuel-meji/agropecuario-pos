@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Plus, Users, X, ChevronDown, Phone, Mail, MapPin, Hash, History } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getClients, createClient, updateClient, deleteClient, getClientHistoryByClientId } from '../../services/api';
+import { getClients, createClient, updateClient, deleteClient, getClientHistoryByClientId, getReceivablesByClient, makeClientBulkPayment } from '../../services/api';
 
 export default function ClientsView() {
   const [clients, setClients] = useState<any[]>([]);
@@ -13,11 +13,22 @@ export default function ClientsView() {
   const [clientHistory, setClientHistory] = useState<any>(null);
   const [expandedPurchase, setExpandedPurchase] = useState<number | null>(null);
   const [newClient, setNewClient] = useState({ name: '', identification: '', email: '', phone: '', address: '' });
+  const [showOnlyPending, setShowOnlyPending] = useState(false);
+  const [receivablesMap, setReceivablesMap] = useState<Record<string, any>>({});
+  const [isBulkPaymentModalOpen, setIsBulkPaymentModalOpen] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState('');
 
   const loadClients = async () => {
     try {
       const data = await getClients();
       setClients(data);
+
+      const receivablesData = await getReceivablesByClient();
+      const map: Record<string, any> = {};
+      receivablesData.forEach((r: any) => {
+         map[r.clientName] = r;
+      });
+      setReceivablesMap(map);
     } catch (error) {
       console.error(error);
       toast.error('Error al cargar los clientes.');
@@ -43,9 +54,10 @@ export default function ClientsView() {
       setEditingClientId(null);
       setNewClient({ name: '', identification: '', email: '', phone: '', address: '' });
       loadClients();
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      toast.error(editingClientId ? 'Hubo un error al actualizar el cliente.' : 'Hubo un error al guardar el cliente.');
+      const msg = error.response?.data?.message || error.response?.data || (editingClientId ? 'Hubo un error al actualizar el cliente.' : 'Hubo un error al guardar el cliente.');
+      toast.error(typeof msg === 'string' ? msg : 'Error al guardar cliente');
     }
   };
 
@@ -72,8 +84,38 @@ export default function ClientsView() {
     }
   };
 
-  const filteredClients = clients.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.identification?.includes(searchTerm));
+  const handleBulkPayment = async () => {
+    if (!paymentAmount || parseFloat(paymentAmount) <= 0) {
+      toast.error("Ingrese un monto válido");
+      return;
+    }
+    if (!clientHistory) return;
+    
+    try {
+      await makeClientBulkPayment(clientHistory.clientName, parseFloat(paymentAmount));
+      toast.success("Abono registrado correctamente");
+      setIsBulkPaymentModalOpen(false);
+      setPaymentAmount('');
+      
+      const updatedHistory = await getClientHistoryByClientId(clientHistory.id);
+      setClientHistory(updatedHistory);
+      loadClients();
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error.response?.data?.message || error.response?.data || "Error al registrar abono");
+    }
+  };
+
+  const filteredClients = clients.filter(c => {
+    const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) || c.identification?.includes(searchTerm);
+    if (!matchesSearch) return false;
+    
+    if (showOnlyPending) {
+       const clientReceivable = receivablesMap[c.name];
+       return clientReceivable && clientReceivable.totalRemainingBalance > 0;
+    }
+    return true;
+  });
 
   return (
     <div className="flex flex-col gap-8 h-full">
@@ -91,7 +133,7 @@ export default function ClientsView() {
         </button>
       </div>
 
-      <div className="premium-panel p-2 flex items-center gap-2">
+      <div className="premium-panel p-2 flex items-center justify-between gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
           <input
@@ -101,6 +143,14 @@ export default function ClientsView() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
+        </div>
+        <div className="pr-4 border-l border-slate-100 dark:border-slate-800 pl-4 hidden md:block">
+          <button 
+             onClick={() => setShowOnlyPending(!showOnlyPending)}
+             className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors ${showOnlyPending ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-600 border border-amber-200 dark:border-amber-800' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border border-transparent hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+          >
+             Solo con deudas
+          </button>
         </div>
       </div>
 
@@ -208,6 +258,7 @@ export default function ClientsView() {
               <h3 className="text-2xl font-black mb-1 text-slate-900 dark:text-white relative">Registrar Cliente</h3>
               <p className="text-slate-500 text-sm mb-8 relative font-medium">Completa la información para el directorio principal.</p>
 
+              <form onSubmit={e => { e.preventDefault(); handleCreateOrUpdate(); }}>
               <div className="grid grid-cols-2 gap-4 mb-8 relative">
                 <div className="col-span-2">
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Nombre Completo</label>
@@ -231,11 +282,12 @@ export default function ClientsView() {
                 </div>
               </div>
               <div className="flex gap-4 relative">
-                <button onClick={() => setIsModalOpen(false)} className="flex-1 py-4 text-slate-500 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 rounded-2xl transition-colors">Cancelar</button>
-                <button onClick={handleCreateOrUpdate} className="flex-1 btn-premium-emerald py-4">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-4 text-slate-500 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 rounded-2xl transition-colors">Cancelar</button>
+                <button type="submit" className="flex-1 btn-premium-emerald py-4">
                   {editingClientId ? 'Actualizar Cliente' : 'Confirmar Registro'}
                 </button>
               </div>
+              </form>
             </motion.div>
           </div>
         )}
@@ -281,9 +333,22 @@ export default function ClientsView() {
                     <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-1">Total Pagado</p>
                     <p className="text-3xl font-black text-slate-900 dark:text-white">₡{clientHistory.totalPaid?.toLocaleString()}</p>
                   </div>
-                  <div className="premium-panel p-6 bg-rose-50/50 dark:bg-rose-900/10 border-rose-100 dark:border-rose-900/30">
-                    <p className="text-[10px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest mb-1">Saldo Pendiente</p>
-                    <p className="text-3xl font-black text-slate-900 dark:text-white">₡{clientHistory.totalPending?.toLocaleString()}</p>
+                  <div className="premium-panel p-6 bg-rose-50/50 dark:bg-rose-900/10 border-rose-100 dark:border-rose-900/30 flex justify-between items-center relative overflow-hidden group">
+                     <div>
+                        <p className="text-[10px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest mb-1">Saldo Pendiente</p>
+                        <p className="text-3xl font-black text-slate-900 dark:text-white">₡{clientHistory.totalPending?.toLocaleString()}</p>
+                     </div>
+                     {clientHistory.totalPending > 0 && (
+                        <button 
+                           onClick={() => {
+                              setPaymentAmount(clientHistory.totalPending.toString());
+                              setIsBulkPaymentModalOpen(true);
+                           }}
+                           className="btn-premium-emerald py-2 px-4 shadow-sm text-xs relative z-10"
+                        >
+                           Abonar
+                        </button>
+                     )}
                   </div>
                 </div>
 
@@ -407,6 +472,38 @@ export default function ClientsView() {
               <div className="p-8 bg-slate-50 dark:bg-slate-950 flex justify-center">
                 <button onClick={() => setIsHistoryOpen(false)} className="btn-premium py-3 px-10 text-sm">Cerrar Expediente</button>
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modern MODAL: Bulk Payment */}
+      <AnimatePresence>
+        {isBulkPaymentModalOpen && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-6">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsBulkPaymentModalOpen(false)} className="absolute inset-0 bg-slate-950/60 backdrop-blur-md" />
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white dark:bg-slate-900 rounded-[40px] p-10 w-full max-w-md shadow-2xl relative z-10 overflow-hidden">
+               <div className="absolute top-[-50px] left-[-50px] w-48 h-48 bg-emerald-500/10 blur-[60px] rounded-full"></div>
+               <h3 className="text-2xl font-black mb-2 text-slate-900 dark:text-white relative">Registrar Abono</h3>
+               <p className="text-slate-500 text-sm mb-8 relative font-medium">Ingrese el monto a registrar para este cliente.</p>
+               
+               <div className="space-y-6 relative">
+                 <div className="relative">
+                    <span className="absolute left-6 top-1/2 -translate-y-1/2 text-xl font-black text-slate-400">₡</span>
+                    <input
+                      type="number"
+                      placeholder="0.00"
+                      value={paymentAmount}
+                      onChange={(e) => setPaymentAmount(e.target.value)}
+                      className="w-full bg-slate-50 dark:bg-slate-950 border-2 border-transparent focus:border-premium-emerald rounded-2xl pl-12 pr-6 py-5 text-2xl font-black text-slate-900 dark:text-white transition-all outline-none"
+                      autoFocus
+                    />
+                 </div>
+                 <div className="flex gap-4">
+                   <button onClick={() => setIsBulkPaymentModalOpen(false)} className="flex-1 py-4 text-slate-500 font-bold hover:bg-slate-50 dark:hover:bg-slate-800 rounded-2xl transition-colors">Cancelar</button>
+                   <button onClick={handleBulkPayment} className="flex-1 btn-premium-emerald py-4">Confirmar</button>
+                 </div>
+               </div>
             </motion.div>
           </div>
         )}

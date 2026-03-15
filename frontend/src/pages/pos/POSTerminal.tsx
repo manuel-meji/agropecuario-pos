@@ -3,10 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, Barcode, Plus, Minus, CreditCard, Banknote,
   ShoppingCart, User, Smartphone, X, Wallet, Percent,
-  DollarSign, ChevronDown, Tag, Trash2
+  DollarSign, ChevronDown, Tag, Trash2, FileText
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getProducts, createSale, getClients } from '../../services/api';
+import { getProducts, createSale, getClients, createClient } from '../../services/api';
 import InvoiceModal from '../../components/InvoiceModal';
 
 /* ─── Types ─────────────────────────────────────────────────────────────────── */
@@ -159,6 +159,11 @@ export default function POSTerminal() {
   const [clientSearchTerm, setClientSearchTerm] = useState('');
   const [showPaymentMethods, setShowPaymentMethods] = useState(false);
   const [isCredit, setIsCredit] = useState(false);
+  const [generateElectronicInvoice, setGenerateElectronicInvoice] = useState(true);
+  // Client creation inline
+  const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+  const [newClient, setNewClient] = useState({ name: '', identification: '', email: '', phone: '', address: '', isCreditEligible: false, maxCreditLevel: 0 });
+  const [isCreatingClient, setIsCreatingClient] = useState(false);
   // Invoice modal state
   const [invoiceData, setInvoiceData] = useState<{ sale: any; cart: any[]; client?: any; change?: number } | null>(null);
 
@@ -175,6 +180,30 @@ export default function POSTerminal() {
     };
     load();
   }, []);
+
+  /* Client Creation */
+  const handleCreateClient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newClient.name || !newClient.identification) {
+      toast.error('Nombre y Cédula son obligatorios');
+      return;
+    }
+    setIsCreatingClient(true);
+    try {
+      const created = await createClient(newClient);
+      const updatedClients = await getClients();
+      setClients(updatedClients);
+      setSelectedClientId(created.id.toString());
+      setIsClientModalOpen(false);
+      setNewClient({ name: '', identification: '', email: '', phone: '', address: '', isCreditEligible: false, maxCreditLevel: 0 });
+      toast.success('Cliente creado y seleccionado exitosamente');
+    } catch (error: any) {
+      const msg = error.response?.data?.message || 'Error al crear el cliente.';
+      toast.error(msg);
+    } finally {
+      setIsCreatingClient(false);
+    }
+  };
 
   /* Cart ops */
   const addToCart = (product: any) => {
@@ -225,10 +254,14 @@ export default function POSTerminal() {
 
   /* Sale submission */
   const submitSale = async (paymentMethod: string) => {
+    if (generateElectronicInvoice && (!selectedClientId || !selectedClient?.identification)) {
+      toast.error('Se requiere un cliente con cédula para Factura Electrónica');
+      return;
+    }
     setIsProcessing(true);
     try {
       const saleData = {
-        paymentMethod,
+        paymentMethod: isCredit ? 'CREDIT' : paymentMethod, // CREDIT overrides if selected
         subtotal,
         discountAmount,
         discountType: discount?.type || null,
@@ -236,7 +269,10 @@ export default function POSTerminal() {
         tax,
         total,
         clientId: selectedClientId ? parseInt(selectedClientId) : null,
+        clientName: selectedClient?.name || 'Consumidor Final',
+        clientIdentification: selectedClient?.identification || '',
         items: cart.map(i => ({ productId: i.product.id, qty: i.qty })),
+        generateElectronicInvoice
       };
       const response = await createSale(saleData);
       toast.success('¡Venta completada con éxito!');
@@ -262,6 +298,12 @@ export default function POSTerminal() {
     const paid = parseFloat(cashAmount);
     if (isNaN(paid) || paid <= 0) { toast.error('Monto inválido'); return; }
     if (paid < total) { toast.error(`Faltan ₡${(total - paid).toLocaleString(undefined, { maximumFractionDigits: 0 })}`); return; }
+    
+    if (generateElectronicInvoice && (!selectedClientId || !selectedClient?.identification)) {
+      toast.error('Se requiere un cliente con cédula para Factura Electrónica');
+      return;
+    }
+
     const change = paid - total;
     setIsProcessing(true);
     try {
@@ -269,7 +311,10 @@ export default function POSTerminal() {
         paymentMethod: 'CASH', subtotal, discountAmount,
         discountType: discount?.type || null, discountValue: discount?.value || null,
         tax, total, clientId: selectedClientId ? parseInt(selectedClientId) : null,
+        clientName: selectedClient?.name || 'Consumidor Final',
+        clientIdentification: selectedClient?.identification || '',
         items: cart.map(i => ({ productId: i.product.id, qty: i.qty })),
+        generateElectronicInvoice
       };
       const response = await createSale(saleData);
       toast.success(`¡Venta completada! Vuelto: ₡${change.toLocaleString(undefined, { maximumFractionDigits: 0 })}`);
@@ -478,6 +523,19 @@ export default function POSTerminal() {
                       {filteredClients.length === 0 && clientSearchTerm && (
                         <div className="py-6 text-center text-slate-400 text-xs font-bold">Sin resultados</div>
                       )}
+                      {/* Plus button to add new client directly from search if no results or as option */}
+                      <div className="mt-2 border-t border-slate-100 dark:border-slate-800 pt-2">
+                        <button
+                          onClick={() => {
+                            setNewClient(prev => ({ ...prev, name: clientSearchTerm }));
+                            setIsClientModalOpen(true);
+                            setIsClientPickerOpen(false);
+                          }}
+                          className="w-full text-left px-3 py-2 rounded-xl text-premium-emerald hover:bg-premium-emerald/10 transition-colors flex items-center justify-center gap-2 text-sm font-bold"
+                        >
+                          <Plus size={16} /> Crear Nuevo Cliente
+                        </button>
+                      </div>
                     </div>
                   </motion.div>
                 )}
@@ -583,19 +641,35 @@ export default function POSTerminal() {
 
             {/* Credit toggle — only if client selected */}
             {selectedClientId && (
-              <button
-                onClick={() => setIsCredit(c => !c)}
-                className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl border text-sm font-bold transition-all ${
-                  isCredit
-                    ? 'bg-premium-emerald/10 border-premium-emerald/30 text-premium-emerald'
-                    : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500'
-                }`}
-              >
-                <span className="flex items-center gap-2"><Wallet size={14} /> Venta a Crédito</span>
-                <div className={`w-10 h-5 rounded-full relative transition-colors ${isCredit ? 'bg-premium-emerald' : 'bg-slate-300 dark:bg-slate-600'}`}>
-                  <motion.div animate={{ x: isCredit ? 20 : 2 }} className="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow" />
-                </div>
-              </button>
+              <div className="space-y-2">
+                <button
+                  onClick={() => setIsCredit(c => !c)}
+                  className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl border text-sm font-bold transition-all ${
+                    isCredit
+                      ? 'bg-premium-emerald/10 border-premium-emerald/30 text-premium-emerald'
+                      : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500'
+                  }`}
+                >
+                  <span className="flex items-center gap-2"><Wallet size={14} /> Venta a Crédito</span>
+                  <div className={`w-10 h-5 rounded-full relative transition-colors ${isCredit ? 'bg-premium-emerald' : 'bg-slate-300 dark:bg-slate-600'}`}>
+                    <motion.div animate={{ x: isCredit ? 20 : 2 }} className="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow" />
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => setGenerateElectronicInvoice(v => !v)}
+                  className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl border text-sm font-bold transition-all ${
+                    generateElectronicInvoice
+                      ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-600'
+                      : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500'
+                  }`}
+                >
+                  <span className="flex items-center gap-2"><FileText size={14} /> Factura Electrónica (Hacienda)</span>
+                  <div className={`w-10 h-5 rounded-full relative transition-colors ${generateElectronicInvoice ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
+                    <motion.div animate={{ x: generateElectronicInvoice ? 20 : 2 }} className="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow" />
+                  </div>
+                </button>
+              </div>
             )}
 
             {/* Payment */}
@@ -782,13 +856,74 @@ export default function POSTerminal() {
           change={invoiceData.change}
           onClose={() => setInvoiceData(null)}
           onDownloadPDF={() => {
-            import('../../utils/pdfGenerator').then(({ generateInvoicePDF }) => {
-              generateInvoicePDF(invoiceData.sale, invoiceData.cart, invoiceData.client);
+            import('../../utils/pdfGenerator').then(({ generateAndDownloadTicket }) => {
+              generateAndDownloadTicket(invoiceData.sale, invoiceData.cart, invoiceData.client);
             }).catch(() => toast.error('Error al generar PDF'));
             setInvoiceData(null);
           }}
         />
       )}
+
+      {/* ── Client Creation Modal ── */}
+      <AnimatePresence>
+        {isClientModalOpen && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-6">
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setIsClientModalOpen(false)}
+              className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
+            />
+
+            <motion.div
+              initial={{ scale: 0.93, opacity: 0, y: 16 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.93, opacity: 0, y: 16 }}
+              className="relative z-10 bg-white dark:bg-slate-900 rounded-[32px] w-full max-w-lg shadow-2xl overflow-hidden flex flex-col"
+            >
+              <div className="px-8 pt-8 pb-4 shrink-0 border-b border-slate-100 dark:border-slate-800">
+                <div className="flex justify-between items-start mb-2">
+                  <h3 className="text-2xl font-black text-slate-900 dark:text-white">Nuevo Cliente Rápido</h3>
+                  <button onClick={() => setIsClientModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                    <X size={20} />
+                  </button>
+                </div>
+                <p className="text-sm text-slate-500">Añade los datos necesarios sin perder tu venta activa.</p>
+              </div>
+
+              <form onSubmit={handleCreateClient} className="flex flex-col">
+                <div className="p-8 space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="col-span-2">
+                      <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1 tracking-widest">Nombre Completo *</label>
+                      <input type="text" autoFocus required className="premium-input w-full" value={newClient.name} onChange={e => setNewClient({ ...newClient, name: e.target.value })} placeholder="Ej. Juan Pérez" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1 tracking-widest">Cédula *</label>
+                      <input type="text" required className="premium-input w-full" value={newClient.identification} onChange={e => setNewClient({ ...newClient, identification: e.target.value })} placeholder="Física o Jurídica" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1 tracking-widest">Teléfono</label>
+                      <input type="tel" className="premium-input w-full" value={newClient.phone} onChange={e => setNewClient({ ...newClient, phone: e.target.value })} placeholder="Ej. 8888-8888" />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1 tracking-widest">Email</label>
+                      <input type="email" className="premium-input w-full" value={newClient.email} onChange={e => setNewClient({ ...newClient, email: e.target.value })} placeholder="correo@ejemplo.com" />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1 tracking-widest">Dirección (Opcional)</label>
+                      <input type="text" className="premium-input w-full" value={newClient.address} onChange={e => setNewClient({ ...newClient, address: e.target.value })} placeholder="Ej. San José, Costa Rica..." />
+                    </div>
+                  </div>
+                </div>
+                <div className="px-8 py-5 border-t border-slate-100 dark:border-slate-800 flex gap-4 bg-slate-50 dark:bg-slate-800/50">
+                  <button type="button" onClick={() => setIsClientModalOpen(false)} className="flex-1 py-3 text-slate-500 font-bold bg-white dark:bg-slate-700 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors border border-slate-200 dark:border-slate-600">Cancelar</button>
+                  <button type="submit" disabled={isCreatingClient} className="flex-1 btn-premium-emerald py-3 shadow-md">{isCreatingClient ? 'Guardando...' : 'Guardar y Seleccionar'}</button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </>
   );
 }

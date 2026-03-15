@@ -34,6 +34,9 @@ public class SaleRequest {
     // Client requested exemption string from Hacienda
     private String exonetAuthorizationCode;
 
+    // Whether to generate Hacienda Electronic Invoice
+    private Boolean generateElectronicInvoice;
+
     @NotEmpty
     private List<SaleItemRequest> items;
 

@@ -1,0 +1,2 @@
+{"timestamp":"2026-03-15T10:14:31.647+00:00","status":500,"error":"Internal Server Error","message":"could not execute statement [Data truncated for column 'category' at row 1] [insert into daily_expenses (amount,category,description,is_deductible_from_profit,registered_by,registered_date) values (?,?,?,?,?,?)]","path":"/api/accounts-payable/1/pay"}
+HTTP 500

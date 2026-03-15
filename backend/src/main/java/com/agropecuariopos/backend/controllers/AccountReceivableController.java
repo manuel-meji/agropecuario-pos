@@ -11,7 +11,9 @@ import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.*;
 import java.util.stream.Collectors;
+import org.springframework.transaction.annotation.Transactional;
 
 @RestController
 @RequestMapping("/api/accounts-receivable")
@@ -147,11 +149,20 @@ public class AccountReceivableController {
         }
 
         @PostMapping("/{id}/pay")
+        @Transactional
         public AccountReceivableResponse makePayment(@PathVariable Long id, @RequestBody PaymentRequest request) {
                 AccountReceivable receivable = accountReceivableRepository.findById(id).orElseThrow();
 
                 BigDecimal previousBalance = receivable.getRemainingBalance();
                 BigDecimal paymentAmount = BigDecimal.valueOf(request.getAmount());
+
+                if (paymentAmount.compareTo(BigDecimal.ZERO) <= 0) {
+                        throw new IllegalArgumentException("Monto de pago inválido");
+                }
+
+                if (paymentAmount.compareTo(previousBalance) > 0) {
+                        throw new IllegalArgumentException("El abono no puede ser mayor que el saldo pendiente (₡" + previousBalance + ")");
+                }
 
                 receivable.setAmountPaid(receivable.getAmountPaid().add(paymentAmount));
 
@@ -180,5 +191,60 @@ public class AccountReceivableController {
                                 saved.getRemainingBalance(),
                                 saved.getStatus().toString(),
                                 saved.getDueDate());
+        }
+
+        @PostMapping("/client/{clientName}/pay")
+        @Transactional
+        public org.springframework.http.ResponseEntity<?> makeClientBulkPayment(@PathVariable String clientName, @RequestBody PaymentRequest request) {
+                List<AccountReceivable> clientReceivables = accountReceivableRepository.findAll().stream()
+                                .filter(ar -> ar.getClientName() != null && ar.getClientName().equals(clientName) && ar.getRemainingBalance().compareTo(BigDecimal.ZERO) > 0)
+                                .sorted(Comparator.comparing(AccountReceivable::getId))
+                                .collect(Collectors.toList());
+
+                BigDecimal remainingPayment = BigDecimal.valueOf(request.getAmount());
+
+                if (remainingPayment.compareTo(BigDecimal.ZERO) <= 0) {
+                        throw new IllegalArgumentException("Monto de pago inválido");
+                }
+
+                BigDecimal totalPending = clientReceivables.stream()
+                                .map(AccountReceivable::getRemainingBalance)
+                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                if (remainingPayment.compareTo(totalPending) > 0) {
+                        throw new IllegalArgumentException("El abono no puede ser mayor que la deuda total consolidada (₡" + totalPending + ")");
+                }
+
+                for (AccountReceivable receivable : clientReceivables) {
+                        if (remainingPayment.compareTo(BigDecimal.ZERO) <= 0) break;
+
+                        BigDecimal balance = receivable.getRemainingBalance();
+                        if (balance.compareTo(BigDecimal.ZERO) > 0) {
+                                BigDecimal amountToApply = remainingPayment.min(balance);
+                                BigDecimal previousBalance = balance;
+
+                                receivable.setAmountPaid(receivable.getAmountPaid().add(amountToApply));
+                                
+                                if (receivable.getRemainingBalance().compareTo(BigDecimal.ZERO) <= 0) {
+                                        receivable.setStatus(AccountReceivable.DebtStatus.PAID_IN_FULL);
+                                } else {
+                                        receivable.setStatus(AccountReceivable.DebtStatus.PARTIAL);
+                                }
+                                
+                                AccountReceivable saved = accountReceivableRepository.save(receivable);
+
+                                com.agropecuariopos.backend.models.PaymentRecord record = new com.agropecuariopos.backend.models.PaymentRecord();
+                                record.setAccountReceivable(saved);
+                                record.setAmount(amountToApply);
+                                record.setPaymentDate(java.time.LocalDateTime.now());
+                                record.setPreviousBalance(previousBalance);
+                                record.setNewBalance(saved.getRemainingBalance());
+                                paymentRecordRepository.save(record);
+
+                                remainingPayment = remainingPayment.subtract(amountToApply);
+                        }
+                }
+
+                return org.springframework.http.ResponseEntity.ok(Collections.singletonMap("message", "Abono masivo procesado exitosamente"));
         }
 }
