@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, Printer, CheckCircle, Banknote, CreditCard, Smartphone,
   Wallet, TrendingDown, TrendingUp, ArrowUpRight,
-  ReceiptText, ShieldCheck, AlertTriangle, Loader2
+  ReceiptText, ShieldCheck, AlertTriangle, Loader2, RefreshCw
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getCashClosingPreview, createCashClosing } from '../services/api';
@@ -37,15 +37,23 @@ const fmt = (n: number | null | undefined) =>
   `₡${(Number(n) || 0).toLocaleString('es-CR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
 export default function CashClosingModal({ isOpen, onClose }: Props) {
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  const formatDT = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+
   const [step, setStep] = useState<'idle' | 'preview' | 'confirm' | 'done'>('idle');
   const [data, setData] = useState<CashClosingData | null>(null);
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
+  const [desde, setDesde] = useState(formatDT(startOfDay));
+  const [hasta, setHasta] = useState(formatDT(now));
 
-  const loadPreview = useCallback(async () => {
+  const loadPreview = useCallback(async (startVal: string, endVal: string) => {
     setLoading(true);
     try {
-      const result = await getCashClosingPreview();
+      const result = await getCashClosingPreview(startVal + ':00', endVal + ':59');
       setData(result);
       setStep('preview');
     } catch {
@@ -58,7 +66,7 @@ export default function CashClosingModal({ isOpen, onClose }: Props) {
   const handleConfirmClose = async () => {
     setLoading(true);
     try {
-      const result = await createCashClosing(notes || undefined);
+      const result = await createCashClosing(notes || undefined, desde + ':00', hasta + ':59');
       setData(result);
       setStep('done');
       toast.success('Cierre de caja registrado exitosamente.');
@@ -81,7 +89,7 @@ export default function CashClosingModal({ isOpen, onClose }: Props) {
 
   // Trigger load when modal opens
   if (isOpen && step === 'idle' && !loading) {
-    loadPreview();
+    loadPreview(desde, hasta);
   }
 
   const today = new Date().toLocaleDateString('es-CR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
@@ -122,6 +130,36 @@ export default function CashClosingModal({ isOpen, onClose }: Props) {
                 <X size={18} />
               </button>
             </div>
+            {/* ── Date/Time Filters ── */}
+            {step === 'preview' && (
+              <div className="px-8 py-4 bg-slate-50 dark:bg-slate-800/30 border-b border-slate-100 dark:border-slate-800 flex flex-col md:flex-row md:items-end gap-4 shrink-0">
+                <div className="flex-1">
+                  <label className="block text-[10px] uppercase font-black tracking-widest text-slate-400 mb-1 ml-1">Desde</label>
+                  <input
+                    type="datetime-local"
+                    className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-premium-emerald/50"
+                    value={desde}
+                    onChange={e => setDesde(e.target.value)}
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-[10px] uppercase font-black tracking-widest text-slate-400 mb-1 ml-1">Hasta</label>
+                  <input
+                    type="datetime-local"
+                    className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-premium-emerald/50"
+                    value={hasta}
+                    onChange={e => setHasta(e.target.value)}
+                  />
+                </div>
+                <button
+                  onClick={() => loadPreview(desde, hasta)}
+                  disabled={loading}
+                  className="px-6 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 font-bold rounded-xl transition-colors h-[38px] flex items-center justify-center gap-2 text-slate-700 dark:text-slate-200"
+                >
+                  <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Actualizar
+                </button>
+              </div>
+            )}
 
             {/* ── Content ── */}
             <div className="flex-1 overflow-y-auto custom-scrollbar print:overflow-visible">

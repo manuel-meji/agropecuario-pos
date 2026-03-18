@@ -166,6 +166,14 @@ export default function POSTerminal() {
   const [isCreatingClient, setIsCreatingClient] = useState(false);
   // Invoice modal state
   const [invoiceData, setInvoiceData] = useState<{ sale: any; cart: any[]; client?: any; change?: number } | null>(null);
+  const [settings, setSettings] = useState<any>({});
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('agropecuario_company_settings');
+      if (stored) setSettings(JSON.parse(stored));
+    } catch {}
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -233,7 +241,7 @@ export default function POSTerminal() {
     ? (subtotal * discount.value) / 100
     : Math.min(discount.value, subtotal);
   const subtotalAfterDiscount = subtotal - discountAmount;
-  const tax = cart.reduce((acc, i) => {
+  const tax = settings.taxExempt ? 0 : cart.reduce((acc, i) => {
     // Usar el taxRate guardado en el producto (0%, 1%, 4%, 13%, etc.)
     const rate = (i.product.taxRate ?? 13) / 100;
     return acc + (i.product.salePrice * i.qty * rate);
@@ -263,7 +271,7 @@ export default function POSTerminal() {
       const saleData = {
         paymentMethod: isCredit ? 'CREDIT' : paymentMethod, // CREDIT overrides if selected
         subtotal,
-        discountAmount,
+        totalDiscount: discountAmount,
         discountType: discount?.type || null,
         discountValue: discount?.value || null,
         tax,
@@ -308,7 +316,7 @@ export default function POSTerminal() {
     setIsProcessing(true);
     try {
       const saleData = {
-        paymentMethod: 'CASH', subtotal, discountAmount,
+        paymentMethod: 'CASH', subtotal, totalDiscount: discountAmount,
         discountType: discount?.type || null, discountValue: discount?.value || null,
         tax, total, clientId: selectedClientId ? parseInt(selectedClientId) : null,
         clientName: selectedClient?.name || 'Consumidor Final',
@@ -433,7 +441,9 @@ export default function POSTerminal() {
                 </div>
                 <div>
                   <h2 className="font-black text-slate-900 dark:text-white text-base leading-tight">Carrito</h2>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{cart.length} ítems</p>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                    {cart.length} ítems {settings.cashierName && `• Atiende: ${settings.cashierName}`}
+                  </p>
                 </div>
               </div>
               {cart.length > 0 && (

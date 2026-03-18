@@ -77,8 +77,11 @@ export const makeSupplierBulkPayment = async (supplierId: number, amount: number
   return response.data;
 };
 // Cash Closing
-export const getCashClosingPreview = () => api.get('/cash-closing/preview').then(res => res.data);
-export const createCashClosing = (notes?: string) => api.post('/cash-closing', null, { params: { notes } }).then(res => res.data);
+export const getCashClosingPreview = (desde?: string, hasta?: string) => 
+  api.get('/cash-closing/preview', { params: { desde, hasta } }).then(res => res.data);
+
+export const createCashClosing = (notes?: string, desde?: string, hasta?: string) => 
+  api.post('/cash-closing', null, { params: { notes, desde, hasta } }).then(res => res.data);
 export const getCashClosingHistory = () => api.get('/cash-closing').then(res => res.data);
 
 // Reports
@@ -130,6 +133,16 @@ export const acceptPartialDocument = (clave: string, montoAceptado: number, deta
 
 export const rejectDocument = (clave: string, detalle: string) =>
   api.post(`/received-documents/${clave}/reject`, { detalle }).then(res => res.data);
+
+// ─── Consecutivos (Hacienda) ───────────────────────────────────────────────
+export const getConsecutive = (tipoDocumento: string) =>
+  api.get(`/invoices/consecutives/${tipoDocumento}`).then(res => res.data);
+
+export const updateConsecutive = (tipoDocumento: string, ultimoConsecutivo: number) =>
+  api.put(`/invoices/consecutives/${tipoDocumento}`, { ultimoConsecutivo }).then(res => res.data);
+
+export const exportSentInvoicesZip = (desde?: string, hasta?: string) =>
+  api.get('/invoices/export-zip', { params: { desde, hasta }, responseType: 'blob' }).then(res => res.data);
 
 export default api;
 

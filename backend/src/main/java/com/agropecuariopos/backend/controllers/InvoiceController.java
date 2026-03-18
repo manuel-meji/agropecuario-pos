@@ -1,18 +1,30 @@
 package com.agropecuariopos.backend.controllers;
 
 import com.agropecuariopos.backend.models.ElectronicInvoice;
+import com.agropecuariopos.backend.models.InvoiceConsecutive;
 import com.agropecuariopos.backend.models.Sale;
 import com.agropecuariopos.backend.repositories.ElectronicInvoiceRepository;
+import com.agropecuariopos.backend.repositories.InvoiceConsecutiveRepository;
 import com.agropecuariopos.backend.repositories.SaleRepository;
 import com.agropecuariopos.backend.services.hacienda.HaciendaInvoiceService;
 import com.agropecuariopos.backend.services.hacienda.HaciendaSubmissionService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 /**
  * Controlador REST para gestión de comprobantes electrónicos.
@@ -32,6 +44,9 @@ public class InvoiceController {
 
     @Autowired
     private SaleRepository saleRepository;
+
+    @Autowired
+    private InvoiceConsecutiveRepository consecutiveRepository;
 
     /**
      * Emite el comprobante electrónico de una venta.
@@ -118,5 +133,116 @@ public class InvoiceController {
                 "estado", invoice.getEstado(),
                 "intentos", invoice.getIntentosEnvio()
         ));
+    }
+
+    /**
+     * Consulta el número consecutivo actual para un tipo de documento
+     * GET /api/invoices/consecutives/{tipoDocumento}
+     */
+    @GetMapping("/consecutives/{tipoDocumento}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> getConsecutive(@PathVariable String tipoDocumento) {
+        return consecutiveRepository.findByTipoDocumento(tipoDocumento)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Actualiza el último número consecutivo para un tipo de documento
+     * PUT /api/invoices/consecutives/{tipoDocumento}
+     */
+    @PutMapping("/consecutives/{tipoDocumento}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> updateConsecutive(@PathVariable String tipoDocumento, @RequestBody Map<String, Long> payload) {
+        Long newValue = payload.get("ultimoConsecutivo");
+        if (newValue == null || newValue < 0) {
+            return ResponseEntity.badRequest().body("invalid ultimoConsecutivo value");
+        }
+        
+        InvoiceConsecutive consecutive = consecutiveRepository.findByTipoDocumento(tipoDocumento)
+                .orElseGet(() -> {
+                    InvoiceConsecutive nuevo = new InvoiceConsecutive();
+                    nuevo.setTipoDocumento(tipoDocumento);
+                    nuevo.setSucursal("001");
+                    nuevo.setPuntoVenta("00001");
+                    return nuevo;
+                });
+
+        consecutive.setUltimoConsecutivo(newValue);
+        consecutiveRepository.save(consecutive);
+        
+        return ResponseEntity.ok(consecutive);
+    }
+
+    /**
+     * Exportación masiva de todos los documentos emitidos en un ZIP.
+     * GET /api/invoices/export-zip?desde=2025-01-01&hasta=2025-03-31
+     */
+    @GetMapping("/export-zip")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CASHIER')")
+    public ResponseEntity<byte[]> exportarZip(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta
+    ) {
+        try {
+            List<ElectronicInvoice> docs;
+            if (desde != null && hasta != null) {
+                docs = invoiceRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(
+                        desde.atStartOfDay(), hasta.plusDays(1).atStartOfDay());
+            } else {
+                docs = invoiceRepository.findAllOrderByCreatedAtDesc();
+            }
+
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            try (ZipOutputStream zos = new ZipOutputStream(baos)) {
+                for (ElectronicInvoice doc : docs) {
+                    String baseName = "emitidos/" + doc.getClave();
+
+                    // XML Generado
+                    if (doc.getXmlGenerado() != null && !doc.getXmlGenerado().isBlank()) {
+                        addZipEntry(zos, baseName + "_generado.xml",
+                                doc.getXmlGenerado().getBytes(StandardCharsets.UTF_8));
+                    }
+
+                    // XML Firmado
+                    if (doc.getXmlFirmadoBase64() != null && !doc.getXmlFirmadoBase64().isBlank()) {
+                        try {
+                            byte[] decodedXml = java.util.Base64.getDecoder().decode(doc.getXmlFirmadoBase64());
+                            addZipEntry(zos, baseName + "_firmado.xml", decodedXml);
+                        } catch (IllegalArgumentException e) {
+                            // If it's not actually base64, save as is
+                            addZipEntry(zos, baseName + "_firmado.xml",
+                                    doc.getXmlFirmadoBase64().getBytes(StandardCharsets.UTF_8));
+                        }
+                    }
+
+                    // Respuesta de Hacienda
+                    if (doc.getXmlRespuestaHacienda() != null && !doc.getXmlRespuestaHacienda().isBlank()) {
+                        addZipEntry(zos, baseName + "_respuesta_hacienda.xml",
+                                doc.getXmlRespuestaHacienda().getBytes(StandardCharsets.UTF_8));
+                    }
+                }
+            }
+
+            String nombreArchivo = "FacturasEmitidas"
+                    + (desde != null ? "_" + desde : "")
+                    + (hasta != null ? "_al_" + hasta : "")
+                    + ".zip";
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+            headers.setContentDispositionFormData("attachment", nombreArchivo);
+
+            return ResponseEntity.ok().headers(headers).body(baos.toByteArray());
+
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    private void addZipEntry(ZipOutputStream zos, String name, byte[] data) throws Exception {
+        zos.putNextEntry(new ZipEntry(name));
+        zos.write(data);
+        zos.closeEntry();
     }
 }

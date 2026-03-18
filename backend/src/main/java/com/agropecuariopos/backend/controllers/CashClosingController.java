@@ -10,6 +10,7 @@ import com.agropecuariopos.backend.repositories.PaymentRecordRepository;
 import com.agropecuariopos.backend.repositories.SaleRepository;
 import com.agropecuariopos.backend.security.UserDetailsImpl;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
@@ -32,24 +33,23 @@ public class CashClosingController {
 
     // ─── Preview: compute today's numbers without saving ────────────────────────
     @GetMapping("/preview")
-    public CashClosingDTO previewToday() {
-        return buildReport(
-                LocalDateTime.of(LocalDate.now(), LocalTime.MIN),
-                LocalDateTime.of(LocalDate.now(), LocalTime.MAX),
-                null,
-                false
-        );
+    public CashClosingDTO previewToday(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime desde,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime hasta) {
+        LocalDateTime s = desde != null ? desde : LocalDateTime.of(LocalDate.now(), LocalTime.MIN);
+        LocalDateTime e = hasta != null ? hasta : LocalDateTime.of(LocalDate.now(), LocalTime.MAX);
+        return buildReport(s, e, null, false);
     }
 
     // ─── Confirm: compute + save to DB ──────────────────────────────────────────
     @PostMapping
-    public CashClosingDTO closeCashRegister(@RequestParam(required = false) String notes) {
-        return buildReport(
-                LocalDateTime.of(LocalDate.now(), LocalTime.MIN),
-                LocalDateTime.of(LocalDate.now(), LocalTime.MAX),
-                notes,
-                true
-        );
+    public CashClosingDTO closeCashRegister(
+            @RequestParam(required = false) String notes,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime desde,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime hasta) {
+        LocalDateTime s = desde != null ? desde : LocalDateTime.of(LocalDate.now(), LocalTime.MIN);
+        LocalDateTime e = hasta != null ? hasta : LocalDateTime.of(LocalDate.now(), LocalTime.MAX);
+        return buildReport(s, e, notes, true);
     }
 
     // ─── History ─────────────────────────────────────────────────────────────────
@@ -97,11 +97,10 @@ public class CashClosingController {
                 totalGrossProfit = totalGrossProfit.add(sale.getTotalGrossProfit());
 
             switch (sale.getPaymentMethod()) {
-                case CASH         -> totalCash   = totalCash.add(amount);
-                case CARD         -> totalCard   = totalCard.add(amount);
-                // Handle both SINPE_MOVIL variants
+                case CASH -> totalCash = totalCash.add(amount);
+                case CARD -> totalCard = totalCard.add(amount);
                 case SINPE_MOVIL, SIMPE_MOVIL -> totalSinpe = totalSinpe.add(amount);
-                case CREDIT       -> totalCredit = totalCredit.add(amount);
+                case CREDIT -> totalCredit = totalCredit.add(amount);
                 default -> {}
             }
         }
