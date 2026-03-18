@@ -15,6 +15,8 @@ const DEFAULT_SETTINGS = {
   currency: 'CRC',
   printMode: 'browser',
   printerName: '',
+  cashierName: '',
+  taxExempt: false,
 };
 
 function loadSettings() {
@@ -25,14 +27,21 @@ function loadSettings() {
   return DEFAULT_SETTINGS;
 }
 
+import { getConsecutive, updateConsecutive } from '../../services/api';
+
 export default function SettingsView() {
   const [activeTab, setActiveTab] = useState('general');
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [dirty, setDirty] = useState(false);
+  const [consecutive, setConsecutive] = useState<number | null>(null);
+  const [consecutiveDirty, setConsecutiveDirty] = useState(false);
 
   // Cargar al montar
   useEffect(() => {
     setSettings(loadSettings());
+    getConsecutive('01')
+      .then(res => setConsecutive(res.ultimoConsecutivo))
+      .catch(() => setConsecutive(0));
   }, []);
 
   const handleChange = (field: string, value: string) => {
@@ -40,10 +49,18 @@ export default function SettingsView() {
     setDirty(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     try {
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
       setDirty(false);
+      
+      // Save consecutive if modified
+      if (consecutiveDirty && consecutive !== null) {
+        await updateConsecutive('01', consecutive);
+        await updateConsecutive('04', consecutive);
+        setConsecutiveDirty(false);
+      }
+      
       toast.success('¡Configuración guardada correctamente!');
     } catch {
       toast.error('Error al guardar la configuración.');
@@ -73,8 +90,8 @@ export default function SettingsView() {
            </button>
            <button
              onClick={handleSave}
-             disabled={!dirty}
-             className={`liquid-btn-primary py-2 px-6 shadow-sm flex items-center justify-center gap-2 text-sm font-semibold transition-all ${!dirty ? 'opacity-50 cursor-not-allowed' : 'hover:scale-[1.02]'}`}
+             disabled={!dirty && !consecutiveDirty}
+             className={`liquid-btn-primary py-2 px-6 shadow-sm flex items-center justify-center gap-2 text-sm font-semibold transition-all ${(!dirty && !consecutiveDirty) ? 'opacity-50 cursor-not-allowed' : 'hover:scale-[1.02]'}`}
            >
              <Save size={18} /> Guardar
            </button>
@@ -140,6 +157,20 @@ export default function SettingsView() {
                       <div className="space-y-2 md:col-span-2">
                          <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Contraseña API</label>
                          <input type="password" className="liquid-input w-full" defaultValue="**********" />
+                      </div>
+                      <div className="space-y-2 md:col-span-2 pb-4">
+                         <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Último Consecutivo Utilizado</label>
+                         <p className="text-xs text-slate-500 mb-2">Define o ajusta el número consecutivo donde quieres empezar a facturar. (El sistema incrementará 1 a partir de este número). Aplica para Tiquetes (04) y Facturas (01).</p>
+                         <input 
+                           type="number" 
+                           min="0"
+                           className="liquid-input w-full" 
+                           value={consecutive ?? ''} 
+                           onChange={e => {
+                             setConsecutive(parseInt(e.target.value) || 0);
+                             setConsecutiveDirty(true);
+                           }}
+                         />
                       </div>
                    </div>
 
@@ -253,6 +284,26 @@ export default function SettingsView() {
                               <option value="CRC">Colón Costarricense (₡)</option>
                               <option value="USD">Dólar Estadounidense ($)</option>
                            </select>
+                        </div>
+                        <div className="space-y-2">
+                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Persona Atendiendo (Cajero/a)</label>
+                           <input
+                             type="text"
+                             className="w-full bg-slate-50 dark:bg-slate-800/50 border-none rounded-2xl px-5 py-4 text-slate-800 dark:text-white font-bold focus:ring-2 focus:ring-premium-emerald/20 outline-none transition-all"
+                             placeholder="Nombre del cajero..."
+                             value={settings.cashierName}
+                             onChange={e => handleChange('cashierName', e.target.value)}
+                           />
+                        </div>
+                        <div className="space-y-2 md:col-span-2 p-4 bg-orange-50 dark:bg-orange-900/10 rounded-2xl border border-orange-100 dark:border-orange-900/30 flex items-center justify-between">
+                           <div>
+                             <label className="font-bold text-orange-800 dark:text-orange-400">Régimen Exento de Impuestos</label>
+                             <p className="text-xs text-orange-600 dark:text-orange-500/80 mt-1">Habilita esta opción si tu negocio pertenece al Régimen de Tributación Simplificada o Agropecuario sin IVA.</p>
+                           </div>
+                           <label className="relative inline-flex items-center cursor-pointer">
+                             <input type="checkbox" className="sr-only peer" checked={settings.taxExempt} onChange={e => handleChange('taxExempt', e.target.checked ? 'true' : '')} />
+                             <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-orange-500"></div>
+                           </label>
                         </div>
                     </div>
                 </motion.div>

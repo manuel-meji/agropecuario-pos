@@ -7,6 +7,7 @@ import com.agropecuariopos.backend.models.SaleItem;
 import com.agropecuariopos.backend.repositories.ProductRepository;
 import com.agropecuariopos.backend.repositories.SaleRepository;
 import com.agropecuariopos.backend.services.hacienda.HaciendaInvoiceService;
+import com.agropecuariopos.backend.services.hacienda.ClaveHaciendaService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,7 +17,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.UUID;
 
 @Service
 public class POSSaleService {
@@ -36,13 +36,22 @@ public class POSSaleService {
     private HaciendaInvoiceService haciendaInvoiceService;
 
     @Autowired
+    private ClaveHaciendaService claveHaciendaService;
+
+    @Autowired
     private com.agropecuariopos.backend.repositories.ClientRepository clientRepository;
 
     @Transactional
     public Sale processNewSale(SaleRequest request) {
 
         Sale newSale = new Sale();
-        newSale.setInvoiceNumber("FE-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase());
+        
+        boolean tieneReceptor = request.getClientIdentification() != null && !request.getClientIdentification().isBlank() 
+            || request.getClientId() != null;
+        String tipoDoc = tieneReceptor ? HaciendaInvoiceService.TIPO_FACTURA : HaciendaInvoiceService.TIPO_TIQUETE;
+        String consecutivo = claveHaciendaService.generarConsecutivo(tipoDoc);
+        
+        newSale.setInvoiceNumber(consecutivo);
         newSale.setPaymentMethod(request.getPaymentMethod());
         newSale.setStatus(Sale.SaleStatus.COMPLETED);
         newSale.setClientName(request.getClientName());

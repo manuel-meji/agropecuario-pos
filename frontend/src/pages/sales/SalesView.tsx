@@ -125,7 +125,7 @@ export default function SalesView() {
   });
 
   return (
-    <div className="flex flex-col gap-6 w-full max-w-7xl mx-auto h-[calc(100vh-8rem)]">
+    <div className="flex flex-col gap-6 w-full mx-auto px-4 lg:px-8 h-[calc(100vh-8rem)]">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
@@ -221,8 +221,8 @@ export default function SalesView() {
                   <td className="p-6">
                     <div className="flex flex-col">
                       <span className="font-bold text-slate-800 dark:text-slate-200">{item.clientName || 'Cliente General'}</span>
-                      <span className={`text - [10px] font - black mt - 1 px - 2 py - 0.5 rounded - md w - max uppercase tracking - tighter ${item.type === 'SALE' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600' : 'bg-purple-100 dark:bg-purple-900/30 text-purple-600'
-                        } `}>
+                      <span className={`text-[10px] font-black mt-1 px-2 py-0.5 rounded-md w-max uppercase tracking-tighter ${item.type === 'SALE' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600' : 'bg-purple-100 dark:bg-purple-900/30 text-purple-600'
+                        }`}>
                         {item.type === 'SALE' ? 'Venta' : 'Abono'}
                       </span>
                     </div>
@@ -251,11 +251,11 @@ export default function SalesView() {
                     </div>
                   </td>
                   <td className="p-6">
-                    <span className={`text - [10px] font - black px - 3 py - 1 rounded - full uppercase tracking - tighter ${item.status === 'CANCELLED' ? 'bg-slate-100 dark:bg-slate-800 text-slate-500' :
+                    <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-tighter ${item.status === 'CANCELLED' ? 'bg-slate-100 dark:bg-slate-800 text-slate-500' :
                       item.status === 'PENDING' ? 'bg-rose-100 dark:bg-rose-900/30 text-rose-600' :
                         item.status === 'PARTIAL' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600' :
                           'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600'
-                      } `}>
+                      }`}>
                       {item.status === 'CANCELLED' ? 'Cancelado' :
                         item.status === 'PENDING' ? 'Pendiente' :
                           item.status === 'PARTIAL' ? 'Parcial' : 'Completado'}

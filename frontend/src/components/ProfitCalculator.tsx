@@ -45,6 +45,7 @@ export default function ProfitCalculator({ purchaseCost, salePrice, onPriceChang
   return (
     <motion.div className="space-y-2">
       <button
+        type="button"
         onClick={() => setIsExpanded(!isExpanded)}
         className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all border ${
           isExpanded 
@@ -91,6 +92,7 @@ export default function ProfitCalculator({ purchaseCost, salePrice, onPriceChang
               {/* Mode Selector */}
               <div className="grid grid-cols-3 gap-2">
                 <button
+                  type="button"
                   onClick={() => handleProfitChange('percentage', profitValue)}
                   className={`flex flex-col items-center py-3 rounded-xl font-bold text-xs transition-all gap-1 ${
                     profitMode === 'percentage'
@@ -102,6 +104,7 @@ export default function ProfitCalculator({ purchaseCost, salePrice, onPriceChang
                   Porcentaje
                 </button>
                 <button
+                  type="button"
                   onClick={() => handleProfitChange('fixed', profitValue)}
                   className={`flex flex-col items-center py-3 rounded-xl font-bold text-xs transition-all gap-1 ${
                     profitMode === 'fixed'
@@ -113,6 +116,7 @@ export default function ProfitCalculator({ purchaseCost, salePrice, onPriceChang
                   Monto Fijo
                 </button>
                 <button
+                  type="button"
                   onClick={() => handleProfitChange('price', salePrice)}
                   className={`flex flex-col items-center py-3 rounded-xl font-bold text-xs transition-all gap-1 ${
                     profitMode === 'price'
@@ -153,6 +157,7 @@ export default function ProfitCalculator({ purchaseCost, salePrice, onPriceChang
                         {profitMode === 'percentage' ? (
                           [10, 20, 30, 50].map(pct => (
                             <button
+                              type="button"
                               key={pct}
                               onClick={() => setProfitValue(pct)}
                               className={`py-2 rounded-lg font-bold text-xs transition-all ${
@@ -167,6 +172,7 @@ export default function ProfitCalculator({ purchaseCost, salePrice, onPriceChang
                         ) : (
                           [5000, 10000, 25000, 50000].map(amt => (
                             <button
+                              type="button"
                               key={amt}
                               onClick={() => setProfitValue(amt)}
                               className={`py-2 rounded-lg font-bold text-xs transition-all ${

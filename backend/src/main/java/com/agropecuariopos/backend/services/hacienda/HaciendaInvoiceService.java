@@ -92,9 +92,8 @@ public class HaciendaInvoiceService {
 
         logger.info("🧾 Iniciando emisión {} para venta ID {}", tipoComprobante, sale.getId());
 
-        // PASO 1: Generar consecutivo y clave de 50 dígitos
-        // El consecutivo se genera primero para incluirlo en la clave
-        String numeroConsecutivo = claveService.generarConsecutivo(tipoDoc);
+        // PASO 1: Usar consecutivo ya asignado en la venta y generar clave de 50 dígitos
+        String numeroConsecutivo = sale.getInvoiceNumber();
         String clave50 = claveService.generarClaveConConsecutivo(tipoDoc, numeroConsecutivo, 1);
 
         logger.info("Clave generada: {} | Consecutivo: {}", clave50, numeroConsecutivo);

@@ -130,6 +130,16 @@ function CategorySelect({ categories, value, onChange, onCreate, creating }: {
                   placeholder="Buscar categoría..."
                   value={query}
                   onChange={e => setQuery(e.target.value)}
+                  onKeyDown={async e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      if (query.trim() !== '' && !categories.find(c => c.name.toLowerCase() === query.trim().toLowerCase()) && onCreate) {
+                        await onCreate(query.trim());
+                        setOpen(false);
+                        setQuery('');
+                      }
+                    }
+                  }}
                   className="w-full pl-8 pr-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 rounded-xl outline-none text-slate-800 dark:text-white placeholder:text-slate-400"
                 />
               </div>
@@ -516,11 +526,13 @@ export default function InventoryView() {
     return 'IN_STOCK';
   };
 
-  const filteredProducts = products.filter(p =>
-    p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (p.internalCode || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (p.cabysCode || '').includes(searchTerm)
-  );
+  const filteredProducts = React.useMemo(() => {
+    return products.filter(p =>
+      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (p.internalCode || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (p.cabysCode || '').includes(searchTerm)
+    );
+  }, [products, searchTerm]);
 
   return (
     <div className="flex flex-col gap-8 h-full">
