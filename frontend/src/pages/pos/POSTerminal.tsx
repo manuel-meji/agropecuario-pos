@@ -857,7 +857,8 @@ export default function POSTerminal() {
           onClose={() => setInvoiceData(null)}
           onDownloadPDF={() => {
             import('../../utils/pdfGenerator').then(({ generateAndDownloadTicket }) => {
-              generateAndDownloadTicket(invoiceData.sale, invoiceData.cart, invoiceData.client);
+              generateAndDownloadTicket(invoiceData.sale, invoiceData.cart, invoiceData.client)
+                .catch(() => toast.error('Error al generar PDF'));
             }).catch(() => toast.error('Error al generar PDF'));
             setInvoiceData(null);
           }}

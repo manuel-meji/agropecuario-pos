@@ -139,6 +139,15 @@ public class XMLDocumentGeneratorV44 {
             xml.append("      <Tipo>").append(tipoReceptor).append("</Tipo>\n");
             xml.append("      <Numero>").append(sale.getClientIdentification()).append("</Numero>\n");
             xml.append("    </Identificacion>\n");
+            // OtrasSenasExtranjero: obligatorio cuando TipoIdentificacion = 05 (Extranjero No Domiciliado)
+            if ("05".equals(tipoReceptor)) {
+                // Intentar obtener dirección del cliente registrado, o usar valor por defecto
+                String senasExtranjero = (sale.getClient() != null && sale.getClient().getAddress() != null
+                        && !sale.getClient().getAddress().isBlank())
+                        ? sale.getClient().getAddress()
+                        : "Extranjero No Domiciliado";
+                xml.append("    <OtrasSenasExtranjero>").append(escapeXml(senasExtranjero)).append("</OtrasSenasExtranjero>\n");
+            }
             xml.append("  </Receptor>\n");
         }
 
@@ -322,14 +331,30 @@ public class XMLDocumentGeneratorV44 {
     }
 
     /**
-     * Determina el tipo de identificación del receptor según longitud de cédula.
+     * Determina el tipo de identificación del receptor según la Resolución 0027-2024 v4.4.
+     *
+     * Tipos soportados:
+     *   01 = Cédula Física (9 dígitos)
+     *   02 = Cédula Jurídica (10 dígitos)
+     *   03 = DIMEX (11-12 dígitos)
+     *   04 = NITE (10 dígitos, mismo largo que jurídica — se distingue por contexto externo)
+     *   05 = Extranjero No Domiciliado (hasta 20 caracteres alfanuméricos)
+     *   06 = No Contribuyente / Consumidor Final
+     *
+     * Lógica: si la cédula tiene caracteres no numéricos o longitud > 12 chars → tipo 05 (extranjero).
+     * Si el campo viene vacío o null → tipo 06 (No Contribuyente).
      */
     private String detectTipoCedula(String cedula) {
-        if (cedula == null) return "06"; // No Contribuyente
-        String clean = cedula.replaceAll("[^0-9]", "");
-        return switch (clean.length()) {
+        if (cedula == null || cedula.isBlank()) return "06"; // No Contribuyente
+        String clean = cedula.trim();
+        String soloDigitos = clean.replaceAll("[^0-9]", "");
+        // Si tiene caracteres no numéricos o longitud fuera del rango costarricense → Extranjero (05)
+        if (!clean.equals(soloDigitos) || clean.length() > 12) {
+            return "05"; // Extranjero No Domiciliado — hasta 20 chars según v4.4
+        }
+        return switch (soloDigitos.length()) {
             case 9       -> "01"; // Cédula Física
-            case 10      -> "02"; // Cédula Jurídica
+            case 10      -> "02"; // Cédula Jurídica (o NITE — se asume jurídica por defecto)
             case 11, 12  -> "03"; // DIMEX
             default      -> "06"; // No Contribuyente
         };

@@ -1,7 +1,11 @@
 import jsPDF from 'jspdf';
+import QRCode from 'qrcode';
 import { getCompanySettings } from './companySettings';
 
 export const generateTicketPDF = (saleData: any, cart: any[], clientInfo?: any, companyData?: any): jsPDF => {
+  // Nota: Esta función es síncrona para compatibilidad con el código existente.
+  // El QR se genera de forma síncrona usando el canvas interno de qrcode si está disponible,
+  // y se almacena en caché via saleData._qrDataUrl si se pre-generó con generateTicketPDFAsync.
   const company = companyData || getCompanySettings();
   
   // Calculamos la altura dinámica del rollo (min aprox 140mm)
@@ -57,7 +61,7 @@ export const generateTicketPDF = (saleData: any, cart: any[], clientInfo?: any, 
   if(company.address) drawTextCenter(company.address, 7);
   
   y += 2;
-  drawTextLeft(`Tipo Doc: ${saleData?.invoiceNumber ? 'Factura Electronica V4.3' : 'Tiquete POS'}`, 8);
+  drawTextLeft(`Tipo Doc: ${saleData?.invoiceNumber ? 'Factura Electronica V4.4' : 'Tiquete POS'}`, 8);
   drawTextLeft(`Fecha: ${new Date().toLocaleString('es-CR')}`, 8);
   
   if (clientInfo && clientInfo.name) {
@@ -166,18 +170,57 @@ export const generateTicketPDF = (saleData: any, cart: any[], clientInfo?: any, 
   drawTextCenter("MH-DGT-RES-0027-2024", 7);
   drawTextCenter("** Nota: Productos con G1 1%,G2 2%, G13 13%, E Exento **", 6);
   drawTextCenter("Software M&M", 7);
+
+  // ── QR de la clave (pre-generado de forma async si está disponible) ──
+  // El QR se incluye si saleData._qrDataUrl fue pre-cargado con prepareQR()
+  if (saleData?._qrDataUrl) {
+    const qrSize = 18; // ~18mm cuadrado
+    const qrX = (58 - qrSize) / 2; // Centrado en el ticket
+    y += 3;
+    try {
+      doc.addImage(saleData._qrDataUrl, 'PNG', qrX, y, qrSize, qrSize);
+      y += qrSize + 1;
+      doc.setFont('times', 'normal');
+      doc.setFontSize(5);
+      const claveLabel = saleData?.key ? `Clave: ${saleData.key.substring(0, 25)}...` : 'Escanee para verificar';
+      doc.text(claveLabel, (58 - doc.getTextWidth(claveLabel)) / 2, y);
+    } catch (e) {
+      // Si el QR no se puede renderizar, continuar sin él
+    }
+  }
   
   return doc;
 };
 
-// Genera y descarga
-export const generateAndDownloadTicket = (saleData: any, cart: any[], clientInfo?: any, companyData?: any) => {
+/**
+ * Pre-genera el QR de forma asíncrona y lo adjunta al saleData._qrDataUrl
+ * Llamar ANTES de generateTicketPDF para que el QR quede incluido en el PDF.
+ */
+export const prepareQR = async (saleData: any): Promise<void> => {
+  const claveQR = saleData?.key || saleData?.invoiceNumber || saleData?.id?.toString() || 'SIN-CLAVE';
+  try {
+    saleData._qrDataUrl = await QRCode.toDataURL(claveQR, {
+      errorCorrectionLevel: 'M',
+      margin: 1,
+      width: 200,
+      color: { dark: '#000000', light: '#ffffff' }
+    });
+  } catch (e) {
+    console.warn('No se pudo generar el QR:', e);
+    saleData._qrDataUrl = undefined;
+  }
+};
+
+// Genera y descarga (con QR si saleData._qrDataUrl está presente)
+export const generateAndDownloadTicket = async (saleData: any, cart: any[], clientInfo?: any, companyData?: any) => {
+  await prepareQR(saleData);
   const doc = generateTicketPDF(saleData, cart, clientInfo, companyData);
   doc.save(`Factura_${saleData?.invoiceNumber || saleData?.id || 'POS'}.pdf`);
-}
+};
 
-// Genera base64 para correo
-export const generateTicketBase64 = (saleData: any, cart: any[], clientInfo?: any, companyData?: any): string => {
+// Genera base64 para correo (con QR si saleData._qrDataUrl está presente)
+export const generateTicketBase64 = async (saleData: any, cart: any[], clientInfo?: any, companyData?: any): Promise<string> => {
+  await prepareQR(saleData);
   const doc = generateTicketPDF(saleData, cart, clientInfo, companyData);
   return doc.output('datauristring');
-}
+};

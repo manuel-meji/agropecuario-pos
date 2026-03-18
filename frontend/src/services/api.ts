@@ -85,6 +85,53 @@ export const getCashClosingHistory = () => api.get('/cash-closing').then(res => 
 export const getTaxReport = (startDate: string, endDate: string) => 
   api.get('/reports/tax', { params: { startDate, endDate } }).then(res => res.data);
 
+// ─── Documentos Recibidos (Art. 7) ─────────────────────────────────────────
+export const getReceivedDocuments = (params?: { estado?: string; desde?: string; hasta?: string }) =>
+  api.get('/received-documents', { params }).then(res => res.data);
+
+export const getReceivedDocumentDetail = (clave: string) =>
+  api.get(`/received-documents/${clave}`).then(res => res.data);
+
+export const syncReceivedDocument = (clave: string) =>
+  api.post(`/received-documents/${clave}/sync`).then(res => res.data);
+
+export const syncAllReceivedDocuments = () =>
+  api.post('/received-documents/sync-all').then(res => res.data);
+
+export const getReceivedDocumentsPendingCount = () =>
+  api.get('/received-documents/pending-count').then(res => res.data);
+
+export const downloadReceivedXml = (clave: string) =>
+  api.get(`/received-documents/${clave}/download-xml`, { responseType: 'blob' }).then(res => res.data);
+
+export const exportReceivedDocumentsZip = (desde?: string, hasta?: string) =>
+  api.get('/received-documents/export-zip', { params: { desde, hasta }, responseType: 'blob' }).then(res => res.data);
+
+// ─── Importar Factura Recibida (Art. 10) ───────────────────────────────────
+/** Importa por clave: 50 dígitos numéricos. Retorna datos del comprobante para preview. */
+export const importDocumentByClave = (clave: string) =>
+  api.post('/received-documents/import-clave', { clave }).then(res => res.data);
+
+/** Importa desde archivo XML o ZIP subido por el usuario. */
+export const importDocumentFromXml = (file: File) => {
+  const form = new FormData();
+  form.append('file', file);
+  return api.post('/received-documents/import-xml', form, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }).then(res => res.data);
+};
+
+// ─── Confirmación/Rechazo MensajeReceptor (Art. 10) ────────────────────────
+export const acceptDocument = (clave: string) =>
+  api.post(`/received-documents/${clave}/accept`).then(res => res.data);
+
+export const acceptPartialDocument = (clave: string, montoAceptado: number, detalle: string) =>
+  api.post(`/received-documents/${clave}/accept-partial`, { montoAceptado, detalle }).then(res => res.data);
+
+export const rejectDocument = (clave: string, detalle: string) =>
+  api.post(`/received-documents/${clave}/reject`, { detalle }).then(res => res.data);
+
 export default api;
+
 
 

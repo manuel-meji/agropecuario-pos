@@ -15,6 +15,8 @@ import SuppliersView from "./pages/suppliers/SuppliersView";
 import LoginView from "./pages/auth/LoginView";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import ExpensesView from "./pages/expenses/ExpensesView";
+import DocumentosRecibidos from "./pages/receiveddocs/DocumentosRecibidos";
+import ImportarFactura from "./pages/receiveddocs/ImportarFactura";
 
 function App() {
   return (
@@ -37,6 +39,8 @@ function App() {
             <Route path="payables" element={<PayablesView />} />
             <Route path="taxes" element={<TaxesView />} />
             <Route path="expenses" element={<ExpensesView />} />
+            <Route path="received-docs" element={<DocumentosRecibidos />} />
+            <Route path="import-factura" element={<ImportarFactura />} />
             <Route path="settings" element={<SettingsView />} />
           </Route>
         </Route>

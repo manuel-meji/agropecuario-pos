@@ -100,7 +100,7 @@ export default function InvoiceModal({ isOpen, saleData, cart, client, change, o
     setIsSending(true);
     const toastId = toast.loading('Generando PDF y enviando correo...');
     try {
-      const pdfBase64 = generateTicketBase64(saleData, cart, client, company);
+      const pdfBase64 = await generateTicketBase64(saleData, cart, client, company);
       await sendReceiptEmail(saleData.id, pdfBase64);
       toast.success('¡Correo enviado exitosamente!', { id: toastId });
     } catch (e: any) {
