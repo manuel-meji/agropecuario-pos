@@ -9,6 +9,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableAsync
 @EnableScheduling
 public class AgropecuarioPosApplication {
+
     public static void main(String[] args) {
         SpringApplication.run(AgropecuarioPosApplication.class, args);
     }
