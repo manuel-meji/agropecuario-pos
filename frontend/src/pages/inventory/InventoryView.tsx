@@ -22,6 +22,8 @@ function CategorySelect({ categories, value, onChange, onCreate, creating }: {
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [showInlineCreate, setShowInlineCreate] = useState(false);
+  const [newCatName, setNewCatName] = useState('');
   const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
   const btnRef = useRef<HTMLButtonElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
@@ -62,6 +64,7 @@ function CategorySelect({ categories, value, onChange, onCreate, creating }: {
         dropRef.current && !dropRef.current.contains(e.target as Node)
       ) {
         setOpen(false);
+        setShowInlineCreate(false);
       }
     };
     document.addEventListener('mousedown', handler);
@@ -145,6 +148,57 @@ function CategorySelect({ categories, value, onChange, onCreate, creating }: {
               </div>
             </div>
 
+            {/* Inline Create Category Form */}
+            {showInlineCreate && onCreate && (
+              <div className="p-2 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
+                <div className="flex items-center gap-2">
+                  <input
+                    autoFocus
+                    type="text"
+                    placeholder="Nombre de nueva categoría..."
+                    value={newCatName}
+                    onChange={e => setNewCatName(e.target.value)}
+                    className="flex-1 px-3 py-1.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none text-slate-800 dark:text-white placeholder:text-slate-400"
+                    onKeyDown={async e => {
+                      if (e.key === 'Enter' && newCatName.trim()) {
+                        e.preventDefault();
+                        await onCreate(newCatName.trim());
+                        setOpen(false);
+                        setShowInlineCreate(false);
+                        setNewCatName('');
+                      } else if (e.key === 'Escape') {
+                        setShowInlineCreate(false);
+                        setNewCatName('');
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    disabled={creating || !newCatName.trim()}
+                    onClick={async () => {
+                      await onCreate(newCatName.trim());
+                      setOpen(false);
+                      setShowInlineCreate(false);
+                      setNewCatName('');
+                    }}
+                    className="p-1.5 bg-premium-emerald text-white rounded-lg disabled:opacity-50 hover:bg-emerald-600 transition-colors"
+                  >
+                    <Check size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowInlineCreate(false);
+                      setNewCatName('');
+                    }}
+                    className="p-1.5 bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Options list */}
             <div className="max-h-52 overflow-y-auto custom-scrollbar">
               <button
@@ -154,7 +208,7 @@ function CategorySelect({ categories, value, onChange, onCreate, creating }: {
               >
                 -- Sin categoría --
               </button>
-              {query.trim() !== '' && !categories.find(c => c.name.toLowerCase() === query.trim().toLowerCase()) && onCreate && (
+              {query.trim() !== '' && !categories.find(c => c.name.toLowerCase() === query.trim().toLowerCase()) && !showInlineCreate && onCreate && (
                 <button
                   type="button"
                   disabled={creating}
@@ -167,6 +221,16 @@ function CategorySelect({ categories, value, onChange, onCreate, creating }: {
                 >
                   <span>Crear "{query.trim()}"</span>
                   <Plus size={14} />
+                </button>
+              )}
+              {query.trim() === '' && !showInlineCreate && onCreate && (
+                <button
+                  type="button"
+                  onClick={() => setShowInlineCreate(true)}
+                  className="w-full text-left px-4 py-2.5 text-sm text-premium-emerald font-bold hover:bg-premium-emerald/10 transition-colors flex items-center gap-2"
+                >
+                  <Plus size={16} />
+                  <span>Crear nueva categoría</span>
                 </button>
               )}
               {filtered.length === 0 && !onCreate && (

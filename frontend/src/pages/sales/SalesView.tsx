@@ -7,10 +7,11 @@ import {
   Receipt,
   X,
   AlertCircle,
-  Lock
+  Lock,
+  FileX
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getSales, getSaleById, deleteSale, getCategories } from '../../services/api';
+import { getSales, getSaleById, deleteSale, getCategories, issueCreditNote } from '../../services/api';
 
 export default function SalesView() {
   const [sales, setSales] = useState<any[]>([]);
@@ -34,6 +35,12 @@ export default function SalesView() {
   const [saleToDelete, setSaleToDelete] = useState<any | null>(null);
   const [password, setPassword] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Credit Note state
+  const [isCreditNoteModalOpen, setIsCreditNoteModalOpen] = useState(false);
+  const [creditNoteReason, setCreditNoteReason] = useState('Anulación de comprobante');
+  const [saleForCreditNote, setSaleForCreditNote] = useState<any | null>(null);
+  const [isIssuingNC, setIsIssuingNC] = useState(false);
 
   const loadSales = async () => {
     try {
@@ -99,6 +106,34 @@ export default function SalesView() {
       toast.error(typeof msg === 'string' ? msg : 'Error al eliminar la venta.');
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleCreditNoteClick = (e: React.MouseEvent, sale: any) => {
+    e.stopPropagation();
+    setSaleForCreditNote(sale);
+    setIsCreditNoteModalOpen(true);
+    setCreditNoteReason('Anulación de comprobante');
+  };
+
+  const confirmCreditNote = async () => {
+    if (!creditNoteReason.trim()) {
+      toast.error('Por favor ingresa una razón para la anulación.');
+      return;
+    }
+
+    setIsIssuingNC(true);
+    try {
+      await issueCreditNote(saleForCreditNote.id, creditNoteReason);
+      toast.success('Nota de Crédito emitida correctamente.');
+      setIsCreditNoteModalOpen(false);
+      setSaleForCreditNote(null);
+      loadSales(); // Recargar para ver el estado (aunque el estado de la venta no cambie, el historial sí)
+    } catch (error: any) {
+      const msg = error.response?.data?.message || error.response?.data || 'Error al emitir la Nota de Crédito.';
+      toast.error(typeof msg === 'string' ? msg : 'Error al emitir la Nota de Crédito.');
+    } finally {
+      setIsIssuingNC(false);
     }
   };
 
@@ -268,6 +303,14 @@ export default function SalesView() {
                           <button onClick={() => handleOpenDetails(item)} className="p-2 hover:bg-green-100 dark:hover:bg-green-900/30 text-green-600 rounded-lg transition-colors" title="Ver detalle">
                             <Eye size={18} />
                           </button>
+                          {/* Botón de Anulación (Solo si no está ya anulada o es crédito sin factura) */}
+                          <button
+                            onClick={(e) => handleCreditNoteClick(e, item)}
+                            className="p-2 hover:bg-amber-100 dark:hover:bg-amber-900/30 text-amber-600 rounded-lg transition-colors"
+                            title="Anular (Nota Cr)"
+                          >
+                            <FileX size={18} />
+                          </button>
                           <button onClick={(e) => handleDeleteClick(e, item)} className="p-2 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600 rounded-lg transition-colors" title="Eliminar">
                             <Trash2 size={18} />
                           </button>
@@ -370,6 +413,55 @@ export default function SalesView() {
                   <span>Total Final:</span>
                   <span className="text-green-600 dark:text-green-400">₡{selectedSale.finalTotal?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                 </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Nota de Crédito */}
+      <AnimatePresence>
+        {isCreditNoteModalOpen && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="liquid-glass-panel w-full max-w-md p-6 shadow-2xl"
+            >
+              <div className="flex items-center gap-3 text-amber-600 mb-4 font-bold text-lg">
+                <FileX /> Emitir Nota de Crédito
+              </div>
+              <p className="text-gray-600 dark:text-gray-400 text-sm mb-6">
+                Esta acción anulará el comprobante electrónico ante Hacienda. La venta seguirá existiendo en el sistema pero marcada como anulada electronicamente.
+              </p>
+
+              <div className="space-y-4 mb-6">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-bold text-gray-400 uppercase ml-1">Razón de la anulación</label>
+                  <textarea
+                    className="liquid-input w-full h-24 resize-none"
+                    placeholder="Ej: Error en el monto, Devolución de mercadería..."
+                    value={creditNoteReason}
+                    onChange={(e) => setCreditNoteReason(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setIsCreditNoteModalOpen(false)}
+                  className="flex-1 py-2 px-4 rounded-xl border border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmCreditNote}
+                  disabled={isIssuingNC}
+                  className="flex-1 py-2 px-4 bg-amber-600 text-white rounded-xl hover:bg-amber-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {isIssuingNC ? 'Procesando...' : <>
+                    <Receipt size={18} /> Emitir NC
+                  </>}
+                </button>
               </div>
             </motion.div>
           </div>

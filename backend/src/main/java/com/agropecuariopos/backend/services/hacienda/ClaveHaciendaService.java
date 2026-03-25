@@ -3,7 +3,6 @@ package com.agropecuariopos.backend.services.hacienda;
 import com.agropecuariopos.backend.models.InvoiceConsecutive;
 import com.agropecuariopos.backend.repositories.InvoiceConsecutiveRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,20 +23,20 @@ public class ClaveHaciendaService {
     private static final String PAIS = "506";
     private static final SecureRandom RANDOM = new SecureRandom();
 
-    @Value("${hacienda.emisor.cedula}")
-    private String emisorCedula;
+    @Autowired
+    private com.agropecuariopos.backend.repositories.CompanySettingsRepository settingsRepository;
 
     @Autowired
     private InvoiceConsecutiveRepository consecutiveRepository;
 
     /**
-     * Genera la clave de 50 dígitos usando un consecutivo ya generado.
-     *
-     * @param tipoDocumento código del tipo ("01", "04", etc.)
-     * @param consecutivo   el consecutivo de 20 dígitos ya generado previamente
-     * @param situacion     1=Normal, 2=Contingencia, 3=Sin Internet
+     * Generar la clave de 50 dígitos usando un consecutivo ya generado.
      */
     public String generarClaveConConsecutivo(String tipoDocumento, String consecutivo, int situacion) {
+        com.agropecuariopos.backend.models.CompanySettings settings = settingsRepository.findFirst()
+                .orElseThrow(() -> new RuntimeException("Configuración no encontrada."));
+        String emisorCedula = settings.getLegalId();
+        
         // Fecha: ddMMyy (6 dígitos, año con 2 dígitos) — formato oficial Hacienda
         String fecha = LocalDate.now().format(DateTimeFormatter.ofPattern("ddMMyy"));
         String cedulaPadded = String.format("%012d", Long.parseLong(emisorCedula.replaceAll("[^0-9]", "")));
@@ -47,7 +46,7 @@ public class ClaveHaciendaService {
         String clave = PAIS + fecha + cedulaPadded + consecutivo + situacion + codigoSeguridad;
 
         if (clave.length() != 50) {
-            throw new IllegalStateException("La clave generada tiene " + clave.length() + " dígitos (deben ser exactamente 50). Consecutivo: '" + consecutivo + "'");
+            throw new IllegalStateException("La clave generada tiene " + clave.length() + " dígitos (deben ser exactamente 50).");
         }
         return clave;
     }
@@ -61,6 +60,10 @@ public class ClaveHaciendaService {
      * @return clave de 50 dígitos
      */
     public String generarClave(String tipoDocumento, int situacion) {
+        com.agropecuariopos.backend.models.CompanySettings settings = settingsRepository.findFirst()
+                .orElseThrow(() -> new RuntimeException("Configuración no encontrada."));
+        String emisorCedula = settings.getLegalId();
+        
         // Fecha: ddMMyy (6 dígitos, año con 2 dígitos) — formato oficial Hacienda
         String fecha = LocalDate.now().format(DateTimeFormatter.ofPattern("ddMMyy"));
         String cedulaPadded = String.format("%012d", Long.parseLong(emisorCedula.replaceAll("[^0-9]", "")));

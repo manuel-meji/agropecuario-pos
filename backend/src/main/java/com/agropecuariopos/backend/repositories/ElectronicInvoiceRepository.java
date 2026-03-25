@@ -12,11 +12,11 @@ public interface ElectronicInvoiceRepository extends JpaRepository<ElectronicInv
 
     Optional<ElectronicInvoice> findByClave(String clave);
 
-    Optional<ElectronicInvoice> findBySaleId(Long saleId);
+    List<ElectronicInvoice> findBySaleId(Long saleId);
 
     List<ElectronicInvoice> findByEstado(ElectronicInvoice.EstadoComprobante estado);
 
-    @Query("SELECT e FROM ElectronicInvoice e WHERE e.estado = 'ENVIADO' AND e.intentosEnvio < 5")
+    @Query("SELECT e FROM ElectronicInvoice e WHERE (e.estado = 'ENVIADO' OR e.estado = 'PENDIENTE' OR e.estado = 'ERROR_ENVIO') AND e.intentosEnvio < 5")
     List<ElectronicInvoice> findPendingStatusCheck();
 
     @Query("SELECT e FROM ElectronicInvoice e LEFT JOIN FETCH e.sale s LEFT JOIN FETCH s.client WHERE e.id = :id")

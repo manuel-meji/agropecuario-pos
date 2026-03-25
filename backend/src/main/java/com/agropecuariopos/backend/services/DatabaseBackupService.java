@@ -36,11 +36,13 @@ public class DatabaseBackupService {
             backupDir.mkdirs();
         }
 
-        String executeCmd = String.format("mysqldump -u %s -p%s --add-drop-table --databases agropecuario_pos -r %s",
-                dbUser, dbPassword, backupDirectoryPath + backupFileName);
+
 
         try {
-            Process runtimeProcess = Runtime.getRuntime().exec(executeCmd);
+            ProcessBuilder processBuilder = new ProcessBuilder("mysqldump", "-u", dbUser, "-p" + dbPassword, "--add-drop-table", "--databases", "agropecuario_pos", "-r", backupDirectoryPath + backupFileName);
+            // Redirigir errores para ver por qué falla si sucede
+            processBuilder.redirectErrorStream(true);
+            Process runtimeProcess = processBuilder.start();
             int processComplete = runtimeProcess.waitFor();
 
             if (processComplete == 0) {

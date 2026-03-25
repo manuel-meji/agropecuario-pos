@@ -49,7 +49,7 @@ public class AccountPayableController {
      * New: get payables by supplier ID (immutable — survives name changes).
      */
     @GetMapping("/by-supplier/{supplierId}")
-    public List<AccountPayable> getPayablesBySupplierId(@PathVariable Long supplierId) {
+    public List<AccountPayable> getPayablesBySupplierId(@PathVariable @org.springframework.lang.NonNull Long supplierId) {
         return accountPayableRepository.findBySupplierId(supplierId);
     }
 
@@ -62,7 +62,7 @@ public class AccountPayableController {
 
     @PostMapping("/{id}/pay")
     @Transactional
-    public AccountPayable makePayment(@PathVariable Long id, @RequestBody PaymentRequest request) {
+    public AccountPayable makePayment(@PathVariable @org.springframework.lang.NonNull Long id, @RequestBody PaymentRequest request) {
         AccountPayable payable = accountPayableRepository.findById(id).orElseThrow();
 
         BigDecimal previousBalance = payable.getRemainingBalance();
@@ -118,7 +118,7 @@ public class AccountPayableController {
      */
     @PostMapping("/by-supplier/{supplierId}/pay")
     @Transactional
-    public org.springframework.http.ResponseEntity<?> makeBulkPaymentBySupplierId(@PathVariable Long supplierId,
+    public org.springframework.http.ResponseEntity<?> makeBulkPaymentBySupplierId(@PathVariable @org.springframework.lang.NonNull Long supplierId,
             @RequestBody PaymentRequest request) {
         List<AccountPayable> payables = accountPayableRepository.findBySupplierId(supplierId);
         String supplierLabel = payables.isEmpty()

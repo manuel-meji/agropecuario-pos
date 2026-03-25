@@ -144,6 +144,24 @@ export const updateConsecutive = (tipoDocumento: string, ultimoConsecutivo: numb
 export const exportSentInvoicesZip = (desde?: string, hasta?: string) =>
   api.get('/invoices/export-zip', { params: { desde, hasta }, responseType: 'blob' }).then(res => res.data);
 
+// ─── Notas de Crédito (Anulaciones) ───────────────────────────────────────
+export const issueCreditNote = (saleId: number, razon: string) =>
+  api.post(`/invoices/sale/${saleId}/credit-note`, { razon }).then(res => res.data);
+
+export const getInvoiceBySale = (saleId: number) =>
+  api.get(`/invoices/sale/${saleId}`).then(res => res.data);
+
+// ─── Configuraciones ──────────────────────────────────────────────────────
+export const getSettings = () => api.get('/settings').then(res => res.data);
+export const updateSettings = (settings: any) => api.put('/settings', settings).then(res => res.data);
+export const uploadCertificate = (file: File) => {
+  const form = new FormData();
+  form.append('file', file);
+  return api.post('/settings/certificate', form, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }).then(res => res.data);
+};
+
 export default api;
 
 

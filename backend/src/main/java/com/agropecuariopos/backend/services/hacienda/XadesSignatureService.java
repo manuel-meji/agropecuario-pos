@@ -72,12 +72,25 @@ public class XadesSignatureService {
 
     public String signXmlDocument(String xmlToSign, String p12FilePath, String p12Password) {
         try {
+            byte[] p12Data;
+            try (FileInputStream fis = new FileInputStream(p12FilePath)) {
+                p12Data = fis.readAllBytes();
+            }
+            return signXmlDocument(xmlToSign, p12Data, p12Password);
+        } catch (Exception e) {
+            logger.error("Error al cargar el archivo P12 desde la ruta: {}", p12FilePath, e);
+            throw new RuntimeException("No se pudo cargar el archivo P12: " + e.getMessage(), e);
+        }
+    }
+
+    public String signXmlDocument(String xmlToSign, byte[] p12Data, String p12Password) {
+        try {
             logger.info("Iniciando firma XAdES-EPES del comprobante electrónico...");
 
             // ── 1. Cargar KeyStore PKCS12 ──────────────────────────────────────────
             KeyStore ks = KeyStore.getInstance("PKCS12");
-            try (FileInputStream fis = new FileInputStream(p12FilePath)) {
-                ks.load(fis, p12Password.toCharArray());
+            try (ByteArrayInputStream bais = new ByteArrayInputStream(p12Data)) {
+                ks.load(bais, p12Password.toCharArray());
             }
 
             String alias = null;

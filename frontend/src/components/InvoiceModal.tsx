@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Download, CheckCircle, Building2, User, Calendar, Hash, CreditCard, Banknote, Smartphone, Wallet, ArrowUpRight, Printer, Mail } from 'lucide-react';
-import { getCompanySettings } from '../utils/companySettings';
+
 import { Receipt } from './receipt/Receipt';
 import { useReactToPrint } from 'react-to-print';
 import { generateEscPosReceipt, printToEscPos } from '../utils/escposPrinter';
@@ -19,6 +19,7 @@ interface InvoiceModalProps {
   change?: number;
   onClose: () => void;
   onDownloadPDF: () => void;
+  companySettings?: any;
 }
 
 
@@ -34,10 +35,11 @@ const PM_MAP: Record<string, { label: string; icon: React.ElementType }> = {
 const fmt = (n: number) =>
   `₡${(n || 0).toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-export default function InvoiceModal({ isOpen, saleData, cart, client, change, onClose, onDownloadPDF }: InvoiceModalProps) {
+export default function InvoiceModal({ isOpen, saleData, cart, client, change, onClose, onDownloadPDF, companySettings }: InvoiceModalProps) {
   const contentRef = useRef<HTMLDivElement>(null);
-  // Leer configuración de empresa desde localStorage (guardada en Configuración)
-  const company = getCompanySettings();
+  
+  // Usar companySettings de las props o defaults vacíos si no viene
+  const company = companySettings || {};
 
   // ── Cerrar con Escape o confirmar con Enter ──────────────────────────────
   useEffect(() => {
@@ -54,15 +56,16 @@ export default function InvoiceModal({ isOpen, saleData, cart, client, change, o
   const PMIcon = pm?.icon ?? Banknote;
 
   // Calcular totales por línea
+  const isTaxExempt = company.taxExempt === true || (company.taxExempt as any) === 'true';
   const lineItems = cart.map(item => {
-    const rate = (item.product.taxRate ?? 13) / 100;
+    const rate = isTaxExempt ? 0 : (item.product.taxRate ?? 13) / 100;
     const lineSubtotal = item.product.salePrice * item.qty;
-    const lineTax = lineSubtotal * rate;
+    const lineTax = isTaxExempt ? 0 : lineSubtotal * rate;
     return { ...item, lineSubtotal, lineTax, lineTotal: lineSubtotal + lineTax, rate };
   });
 
   const subtotal = lineItems.reduce((a, i) => a + i.lineSubtotal, 0);
-  const totalTax = lineItems.reduce((a, i) => a + i.lineTax, 0);
+  const totalTax = isTaxExempt ? 0 : lineItems.reduce((a, i) => a + i.lineTax, 0);
   const discountAmt = saleData?.totalDiscount ?? saleData?.discountAmount ?? 0;
   const grandTotal = saleData?.finalTotal ?? saleData?.total ?? (subtotal + totalTax - discountAmt);
 
@@ -79,7 +82,7 @@ export default function InvoiceModal({ isOpen, saleData, cart, client, change, o
       const mode = company.printMode || 'browser';
       if (mode === 'escpos' && company.printerName) {
         toast.loading('Enviando a impresora...', { id: 'print' });
-        const text = generateEscPosReceipt(saleData, cart, client);
+        const text = generateEscPosReceipt(saleData, cart, client, isTaxExempt);
         await printToEscPos(text, company.printerName);
         toast.success('¡Impreso!', { id: 'print' });
       } else {
@@ -100,7 +103,7 @@ export default function InvoiceModal({ isOpen, saleData, cart, client, change, o
     setIsSending(true);
     const toastId = toast.loading('Generando PDF y enviando correo...');
     try {
-      const pdfBase64 = await generateTicketBase64(saleData, cart, client, company);
+      const pdfBase64 = await generateTicketBase64(saleData, cart, client, { ...company, taxExempt: isTaxExempt });
       await sendReceiptEmail(saleData.id, pdfBase64);
       toast.success('¡Correo enviado exitosamente!', { id: toastId });
     } catch (e: any) {
@@ -112,7 +115,7 @@ export default function InvoiceModal({ isOpen, saleData, cart, client, change, o
 
   const receiptData = {
       businessName: company.businessName || 'Mi Empresa',
-      sellerName: '',
+      sellerName: company.cashierName || 'Vendedor no asignado',
       businessId: company.legalId || '',
       businessEmail: company.email,
       businessPhone: company.phone,
@@ -134,7 +137,7 @@ export default function InvoiceModal({ isOpen, saleData, cart, client, change, o
          description: i.product.name,
          unitPrice: i.product.salePrice,
          total: i.product.salePrice * i.qty,
-         taxCode: (i.product.taxRate ?? 13) === 0 ? 'E' : `G${i.product.taxRate ?? 13}`
+         taxCode: isTaxExempt || (i.product.taxRate ?? 13) === 0 ? 'E' : `G${i.product.taxRate ?? 13}`
       })),
       subTotal: subtotal,
       discount: discountAmt,
@@ -302,10 +305,18 @@ export default function InvoiceModal({ isOpen, saleData, cart, client, change, o
                       <span className="font-bold text-amber-600">− {fmt(discountAmt)}</span>
                     </div>
                   )}
+                  {!isTaxExempt && (
                   <div className="flex justify-between text-sm">
                     <span className="text-slate-500 font-bold">IVA (según tarifa)</span>
                     <span className="font-bold text-slate-700 dark:text-slate-300">{fmt(totalTax)}</span>
                   </div>
+                  )}
+                  {isTaxExempt && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500 font-bold italic">Exento de IVA (Régimen Simplificado)</span>
+                    <span className="font-bold text-emerald-600">₡0,00</span>
+                  </div>
+                  )}
                   <div className="h-px bg-slate-200 dark:bg-slate-800" />
                   <div className="flex justify-between items-center">
                     <span className="font-black text-slate-900 dark:text-white text-base">Total</span>

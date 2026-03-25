@@ -2,76 +2,78 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Building2, Save, X, Server, ShieldCheck, Cloud, HardDrive } from 'lucide-react';
 import toast from 'react-hot-toast';
-
-const SETTINGS_KEY = 'agropecuario_company_settings';
-
-const DEFAULT_SETTINGS = {
-  businessName: '',
-  legalId: '',
-  phone: '',
-  email: '',
-  address: '',
-  province: 'San José',
-  currency: 'CRC',
-  printMode: 'browser',
-  printerName: '',
-  cashierName: '',
-  taxExempt: false,
-};
-
-function loadSettings() {
-  try {
-    const raw = localStorage.getItem(SETTINGS_KEY);
-    if (raw) return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
-  } catch {}
-  return DEFAULT_SETTINGS;
-}
-
+import { getCompanySettings, saveCompanySettings, uploadCertificate, CompanySettings } from '../../utils/companySettings';
 import { getConsecutive, updateConsecutive } from '../../services/api';
 
 export default function SettingsView() {
   const [activeTab, setActiveTab] = useState('general');
-  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<CompanySettings | null>(null);
   const [dirty, setDirty] = useState(false);
   const [consecutive, setConsecutive] = useState<number | null>(null);
   const [consecutiveDirty, setConsecutiveDirty] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [certFile, setCertFile] = useState<File | null>(null);
 
   // Cargar al montar
   useEffect(() => {
-    setSettings(loadSettings());
-    getConsecutive('01')
-      .then(res => setConsecutive(res.ultimoConsecutivo))
-      .catch(() => setConsecutive(0));
+    async function init() {
+      const s = await getCompanySettings();
+      setSettings(s);
+      setLoading(false);
+      
+      try {
+        const res = await getConsecutive('01');
+        setConsecutive(res.ultimoConsecutivo);
+      } catch {
+        setConsecutive(0);
+      }
+    }
+    init();
   }, []);
 
-  const handleChange = (field: string, value: string) => {
-    setSettings(prev => ({ ...prev, [field]: value }));
+  const handleChange = (field: keyof CompanySettings, value: any) => {
+    if (!settings) return;
+    setSettings(prev => prev ? ({ ...prev, [field]: value }) : null);
     setDirty(true);
   };
 
   const handleSave = async () => {
+    if (!settings) return;
+    const loadId = toast.loading('Guardando configuración...');
     try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      await saveCompanySettings(settings);
+      
+      if (certFile) {
+        await uploadCertificate(certFile);
+        setCertFile(null);
+      }
+
       setDirty(false);
       
-      // Save consecutive if modified
       if (consecutiveDirty && consecutive !== null) {
         await updateConsecutive('01', consecutive);
         await updateConsecutive('04', consecutive);
         setConsecutiveDirty(false);
       }
       
-      toast.success('¡Configuración guardada correctamente!');
-    } catch {
-      toast.error('Error al guardar la configuración.');
+      toast.success('¡Configuración guardada correctamente!', { id: loadId });
+    } catch (error) {
+      toast.error('Error al guardar la configuración.', { id: loadId });
     }
   };
 
-  const handleCancel = () => {
-    setSettings(loadSettings());
+  const handleCancel = async () => {
+    setLoading(true);
+    const s = await getCompanySettings();
+    setSettings(s);
     setDirty(false);
+    setLoading(false);
     toast('Cambios descartados.', { icon: '↩️' });
   };
+
+  if (loading || !settings) {
+    return <div className="flex h-full items-center justify-center">Cargando... de base de datos...</div>;
+  }
 
   return (
     <div className="flex flex-col gap-6 w-full max-w-7xl mx-auto h-[calc(100vh-8rem)]">
@@ -137,30 +139,45 @@ export default function SettingsView() {
                          <ShieldCheck size={24} />
                       </div>
                       <div>
-                         <h4 className="font-bold text-blue-900 dark:text-blue-300">Conexión Segura OIDC Activa</h4>
-                         <p className="text-sm text-blue-700 dark:text-blue-400/80 mt-1">El servidor está tramitando y firmando tokens Bearer correctamente con el Entorno Staging (Pruebas) de ATV v4.4.</p>
+                         <h4 className="font-bold text-blue-900 dark:text-blue-300">Conexión Segura Tributación</h4>
+                         <p className="text-sm text-blue-700 dark:text-blue-400/80 mt-1">Configura las credenciales de ATV. Los datos se almacenan de forma encriptada en el servidor (AES-256).</p>
                       </div>
                    </div>
 
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2">
-                         <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Usuario API (ATV)</label>
-                         <input type="text" className="liquid-input w-full" defaultValue="cpf-02-0453-xxxx-x" />
+                         <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Usuario API (Hacienda)</label>
+                         <input 
+                           type="text" 
+                           className="liquid-input w-full" 
+                           value={settings.haciendaUsername || ''} 
+                           onChange={e => handleChange('haciendaUsername', e.target.value)}
+                         />
                       </div>
                       <div className="space-y-2">
-                         <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Entorno de Emisión</label>
-                         <select className="liquid-input w-full cursor-pointer appearance-none">
-                            <option value="test">Sandbox (Pruebas)</option>
-                            <option value="prod">Producción (ATV)</option>
+                         <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Ambiente</label>
+                         <select 
+                           className="liquid-input w-full cursor-pointer appearance-none"
+                           value={settings.haciendaAmbiente}
+                           onChange={e => handleChange('haciendaAmbiente', e.target.value as any)}
+                         >
+                            <option value="stag">Sandbox (Pruebas)</option>
+                            <option value="prod">Producción (Real)</option>
                          </select>
                       </div>
                       <div className="space-y-2 md:col-span-2">
                          <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Contraseña API</label>
-                         <input type="password" className="liquid-input w-full" defaultValue="**********" />
+                         <input 
+                           type="password" 
+                           className="liquid-input w-full" 
+                           placeholder="Dejar en blanco para no cambiar"
+                           value={settings.haciendaPassword || ''}
+                           onChange={e => handleChange('haciendaPassword', e.target.value)}
+                         />
                       </div>
-                      <div className="space-y-2 md:col-span-2 pb-4">
+                      <div className="space-y-2 md:col-span-2">
                          <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Último Consecutivo Utilizado</label>
-                         <p className="text-xs text-slate-500 mb-2">Define o ajusta el número consecutivo donde quieres empezar a facturar. (El sistema incrementará 1 a partir de este número). Aplica para Tiquetes (04) y Facturas (01).</p>
+                         <p className="text-xs text-slate-500 mb-2">Define o ajusta el número consecutivo donde quieres empezar a facturar.</p>
                          <input 
                            type="number" 
                            min="0"
@@ -172,6 +189,16 @@ export default function SettingsView() {
                            }}
                          />
                       </div>
+                      <div className="space-y-2 md:col-span-2">
+                         <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Código Actividad Económica (Hacienda)</label>
+                         <input 
+                           type="text" 
+                           className="liquid-input w-full" 
+                           placeholder="Ej: 512102"
+                           value={settings.haciendaActividadEconomica || ''}
+                           onChange={e => handleChange('haciendaActividadEconomica', e.target.value)}
+                         />
+                      </div>
                    </div>
 
                    <hr className="border-gray-200 dark:border-gray-800" />
@@ -180,12 +207,35 @@ export default function SettingsView() {
                       <h4 className="font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
                          <ShieldCheck size={18} className="text-agro-green" /> Llave Criptográfica (.p12)
                       </h4>
-                      <div className="border border-dashed border-gray-300 dark:border-gray-700 rounded-xl p-8 flex flex-col items-center justify-center text-center bg-gray-50/50 dark:bg-gray-900/20">
-                         <div className="w-12 h-12 bg-white dark:bg-gray-800 rounded-full flex items-center justify-center shadow-sm mb-3">
-                            <Server className="text-gray-400" />
-                         </div>
-                         <p className="font-medium text-gray-800 dark:text-gray-200">El certificado está cargado en el motor Backend</p>
-                         <p className="text-xs text-gray-500 mt-1">Validez restante: 342 Días (Firma XAdES-EPES activa)</p>
+                      <div className="space-y-4">
+                        <div className="flex gap-4 items-center">
+                          <input 
+                            type="password" 
+                            className="liquid-input flex-1" 
+                            placeholder="Contraseña del certificado .p12"
+                            value={settings.haciendaKeystorePassword || ''}
+                            onChange={e => handleChange('haciendaKeystorePassword', e.target.value)}
+                          />
+                        </div>
+                        <div className="border border-dashed border-gray-300 dark:border-gray-700 rounded-xl p-6 flex flex-col items-center justify-center text-center bg-gray-50/50 dark:bg-gray-900/20">
+                           <HardDrive className="text-gray-400 mb-2" />
+                           <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                             {certFile ? certFile.name : (settings.hasCertificate ? '✅ Certificado cargado en sistema' : 'Subir archivo de certificado (.p12)')}
+                           </p>
+                           <input 
+                             type="file" 
+                             accept=".p12" 
+                             className="hidden" 
+                             id="cert-upload" 
+                             onChange={e => setCertFile(e.target.files?.[0] || null)}
+                           />
+                           <label 
+                             htmlFor="cert-upload"
+                             className="mt-3 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-xs font-bold cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                           >
+                             {certFile ? 'Cambiar Archivo' : 'Seleccionar Archivo'}
+                           </label>
+                        </div>
                       </div>
                    </div>
                 </motion.div>
@@ -265,15 +315,45 @@ export default function SettingsView() {
                              value={settings.province}
                              onChange={e => handleChange('province', e.target.value)}
                            >
-                              <option>San José</option>
-                              <option>Alajuela</option>
-                              <option>Cartago</option>
-                              <option>Heredia</option>
-                              <option>Guanacaste</option>
-                              <option>Puntarenas</option>
-                              <option>Limón</option>
+                               <option value="1">San José (1)</option>
+                               <option value="2">Alajuela (2)</option>
+                               <option value="3">Cartago (3)</option>
+                               <option value="4">Heredia (4)</option>
+                               <option value="5">Guanacaste (5)</option>
+                               <option value="6">Puntarenas (6)</option>
+                               <option value="7">Limón (7)</option>
                            </select>
                         </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Cantón (Código 2 dígitos)</label>
+                            <input
+                              type="text"
+                              className="w-full bg-slate-50 dark:bg-slate-800/50 border-none rounded-2xl px-5 py-4 text-slate-800 dark:text-white font-bold focus:ring-2 focus:ring-premium-emerald/20 outline-none transition-all"
+                              placeholder="Ej: 01"
+                              value={settings.canton || ''}
+                              onChange={e => handleChange('canton', e.target.value)}
+                            />
+                         </div>
+                         <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Distrito (Código 2 dígitos)</label>
+                            <input
+                              type="text"
+                              className="w-full bg-slate-50 dark:bg-slate-800/50 border-none rounded-2xl px-5 py-4 text-slate-800 dark:text-white font-bold focus:ring-2 focus:ring-premium-emerald/20 outline-none transition-all"
+                              placeholder="Ej: 01"
+                              value={settings.distrito || ''}
+                              onChange={e => handleChange('distrito', e.target.value)}
+                            />
+                         </div>
+                         <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Barrio (Código 2 dígitos)</label>
+                            <input
+                              type="text"
+                              className="w-full bg-slate-50 dark:bg-slate-800/50 border-none rounded-2xl px-5 py-4 text-slate-800 dark:text-white font-bold focus:ring-2 focus:ring-premium-emerald/20 outline-none transition-all"
+                              placeholder="Ej: 01"
+                              value={settings.barrio || ''}
+                              onChange={e => handleChange('barrio', e.target.value)}
+                            />
+                         </div>
                         <div className="space-y-2">
                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Moneda Principal</label>
                            <select
@@ -300,10 +380,10 @@ export default function SettingsView() {
                              <label className="font-bold text-orange-800 dark:text-orange-400">Régimen Exento de Impuestos</label>
                              <p className="text-xs text-orange-600 dark:text-orange-500/80 mt-1">Habilita esta opción si tu negocio pertenece al Régimen de Tributación Simplificada o Agropecuario sin IVA.</p>
                            </div>
-                           <label className="relative inline-flex items-center cursor-pointer">
-                             <input type="checkbox" className="sr-only peer" checked={settings.taxExempt} onChange={e => handleChange('taxExempt', e.target.checked ? 'true' : '')} />
-                             <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-orange-500"></div>
-                           </label>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input type="checkbox" className="sr-only peer" checked={settings.taxExempt} onChange={e => handleChange('taxExempt', e.target.checked)} />
+                              <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-orange-500"></div>
+                            </label>
                         </div>
                     </div>
                 </motion.div>

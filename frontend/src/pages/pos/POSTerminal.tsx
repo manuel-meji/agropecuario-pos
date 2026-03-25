@@ -12,7 +12,18 @@ import InvoiceModal from '../../components/InvoiceModal';
 /* ─── Types ─────────────────────────────────────────────────────────────────── */
 type DiscountType = 'percentage' | 'fixed';
 interface Discount { type: DiscountType; value: number }
-interface CartItem { product: any; qty: number }
+interface CartItem {
+  product: any;
+  qty: number;
+  exoneration?: {
+    tipoDocumento: string;
+    numeroDocumento: string;
+    nombreInstitucion: string;
+    fechaEmision: string;
+    porcentaje: number;
+    monto: number;
+  }
+}
 
 /* ─── Inline Discount Panel (compact, no separate component needed) ──────────── */
 function InlineDiscount({
@@ -168,11 +179,29 @@ export default function POSTerminal() {
   const [invoiceData, setInvoiceData] = useState<{ sale: any; cart: any[]; client?: any; change?: number } | null>(null);
   const [settings, setSettings] = useState<any>({});
 
+  // Exoneration modal state
+  const [isExonerationModalOpen, setIsExonerationModalOpen] = useState(false);
+  const [itemForExoneration, setItemForExoneration] = useState<number | null>(null);
+  const [tempExoneration, setTempExoneration] = useState<any>({
+    tipoDocumento: '01',
+    numeroDocumento: '',
+    nombreInstitucion: '',
+    fechaEmision: new Date().toISOString().split('T')[0],
+    porcentaje: 13,
+    monto: 0
+  });
+
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem('agropecuario_company_settings');
-      if (stored) setSettings(JSON.parse(stored));
-    } catch {}
+    const loadSettings = async () => {
+      try {
+        const { getCompanySettings } = await import('../../utils/companySettings');
+        const s = await getCompanySettings();
+        setSettings(s);
+      } catch (e) {
+        console.error('Error loading settings', e);
+      }
+    };
+    loadSettings();
   }, []);
 
   useEffect(() => {
@@ -233,6 +262,47 @@ export default function POSTerminal() {
       return { ...item, qty: newQty };
     }));
   };
+
+  const handleOpenExoneration = (index: number) => {
+    const item = cart[index];
+    setItemForExoneration(index);
+    if (item.exoneration) {
+      setTempExoneration(item.exoneration);
+    } else {
+      // Calcular monto sugerido (13% o lo que sea el taxRate)
+      const taxRate = item.product.taxRate || 13;
+      const subtotalItem = item.product.salePrice * item.qty;
+      const suggestedMonto = (subtotalItem * taxRate) / 100;
+
+      setTempExoneration({
+        tipoDocumento: '01',
+        numeroDocumento: '',
+        nombreInstitucion: '',
+        fechaEmision: new Date().toISOString().split('T')[0],
+        porcentaje: taxRate,
+        monto: suggestedMonto
+      });
+    }
+    setIsExonerationModalOpen(true);
+  };
+
+  const saveExoneration = () => {
+    if (!tempExoneration.numeroDocumento || !tempExoneration.nombreInstitucion) {
+      toast.error('Número de documento e Institución son obligatorios');
+      return;
+    }
+    setCart(prev => prev.map((item, idx) =>
+      idx === itemForExoneration ? { ...item, exoneration: { ...tempExoneration } } : item
+    ));
+    setIsExonerationModalOpen(false);
+  };
+
+  const removeExoneration = (index: number) => {
+    setCart(prev => prev.map((item, idx) =>
+      idx === index ? { ...item, exoneration: undefined } : item
+    ));
+  };
+
   const clearCart = () => { setCart([]); setDiscount(null); setSelectedClientId(''); setIsCredit(false); setShowPaymentMethods(false); };
 
   /* Totals */
@@ -242,9 +312,11 @@ export default function POSTerminal() {
     : Math.min(discount.value, subtotal);
   const subtotalAfterDiscount = subtotal - discountAmount;
   const tax = settings.taxExempt ? 0 : cart.reduce((acc, i) => {
-    // Usar el taxRate guardado en el producto (0%, 1%, 4%, 13%, etc.)
     const rate = (i.product.taxRate ?? 13) / 100;
-    return acc + (i.product.salePrice * i.qty * rate);
+    const baseImpuesto = i.product.salePrice * i.qty;
+    const impuestoBruto = baseImpuesto * rate;
+    const exoneracion = i.exoneration?.monto || 0;
+    return acc + Math.max(0, impuestoBruto - exoneracion);
   }, 0);
   const total = subtotalAfterDiscount + tax;
 
@@ -279,8 +351,18 @@ export default function POSTerminal() {
         clientId: selectedClientId ? parseInt(selectedClientId) : null,
         clientName: selectedClient?.name || 'Consumidor Final',
         clientIdentification: selectedClient?.identification || '',
-        items: cart.map(i => ({ productId: i.product.id, qty: i.qty })),
-        generateElectronicInvoice
+        items: cart.map(i => ({
+          productId: i.product.id,
+          qty: i.qty,
+          exonerationTipoDocumento: i.exoneration?.tipoDocumento,
+          exonerationNumeroDocumento: i.exoneration?.numeroDocumento,
+          exonerationNombreInstitucion: i.exoneration?.nombreInstitucion,
+          exonerationFechaEmision: i.exoneration?.fechaEmision ? `${i.exoneration.fechaEmision}T00:00:00` : null,
+          exonerationPorcentaje: i.exoneration?.porcentaje,
+          exonerationMonto: i.exoneration?.monto
+        })),
+        generateElectronicInvoice,
+        taxExempt: settings.taxExempt === true || settings.taxExempt === 'true'
       };
       const response = await createSale(saleData);
       toast.success('¡Venta completada con éxito!');
@@ -306,7 +388,7 @@ export default function POSTerminal() {
     const paid = parseFloat(cashAmount);
     if (isNaN(paid) || paid <= 0) { toast.error('Monto inválido'); return; }
     if (paid < total) { toast.error(`Faltan ₡${(total - paid).toLocaleString(undefined, { maximumFractionDigits: 0 })}`); return; }
-    
+
     if (generateElectronicInvoice && (!selectedClientId || !selectedClient?.identification)) {
       toast.error('Se requiere un cliente con cédula para Factura Electrónica');
       return;
@@ -322,11 +404,11 @@ export default function POSTerminal() {
         clientName: selectedClient?.name || 'Consumidor Final',
         clientIdentification: selectedClient?.identification || '',
         items: cart.map(i => ({ productId: i.product.id, qty: i.qty })),
-        generateElectronicInvoice
+        generateElectronicInvoice,
+        taxExempt: settings.taxExempt === true || settings.taxExempt === 'true'
       };
       const response = await createSale(saleData);
       toast.success(`¡Venta completada! Vuelto: ₡${change.toLocaleString(undefined, { maximumFractionDigits: 0 })}`);
-      // Mostrar modal moderno en vez de window.confirm
       setInvoiceData({ sale: response, cart: [...cart], client: selectedClient, change });
       clearCart(); setCashAmount(''); setIsCashModalOpen(false);
       const data = await getProducts(); setProducts(data);
@@ -511,6 +593,19 @@ export default function POSTerminal() {
                       </div>
                     </div>
                     <div className="overflow-y-auto max-h-48 custom-scrollbar p-1.5">
+                      {/* Plus button to add new client directly from search if no results or as option */}
+                      <div className="pb-1 mb-1 border-b border-slate-100 dark:border-slate-800">
+                        <button
+                          onClick={() => {
+                            setNewClient(prev => ({ ...prev, name: clientSearchTerm }));
+                            setIsClientModalOpen(true);
+                            setIsClientPickerOpen(false);
+                          }}
+                          className="w-full text-left px-3 py-2.5 rounded-xl text-premium-emerald hover:bg-premium-emerald/10 bg-emerald-50/50 dark:bg-emerald-900/20 transition-colors flex items-center justify-center gap-2 text-sm font-bold"
+                        >
+                          <Plus size={16} /> Crear Nuevo Cliente
+                        </button>
+                      </div>
                       <button
                         onClick={() => { setSelectedClientId(''); setIsClientPickerOpen(false); setIsCredit(false); }}
                         className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
@@ -533,19 +628,6 @@ export default function POSTerminal() {
                       {filteredClients.length === 0 && clientSearchTerm && (
                         <div className="py-6 text-center text-slate-400 text-xs font-bold">Sin resultados</div>
                       )}
-                      {/* Plus button to add new client directly from search if no results or as option */}
-                      <div className="mt-2 border-t border-slate-100 dark:border-slate-800 pt-2">
-                        <button
-                          onClick={() => {
-                            setNewClient(prev => ({ ...prev, name: clientSearchTerm }));
-                            setIsClientModalOpen(true);
-                            setIsClientPickerOpen(false);
-                          }}
-                          className="w-full text-left px-3 py-2 rounded-xl text-premium-emerald hover:bg-premium-emerald/10 transition-colors flex items-center justify-center gap-2 text-sm font-bold"
-                        >
-                          <Plus size={16} /> Crear Nuevo Cliente
-                        </button>
-                      </div>
                     </div>
                   </motion.div>
                 )}
@@ -569,7 +651,7 @@ export default function POSTerminal() {
                 </motion.div>
               ) : (
                 <div className="space-y-2 py-1">
-                  {cart.map(item => (
+                  {cart.map((item, index) => (
                     <motion.div
                       layout
                       initial={{ opacity: 0, x: 20 }}
@@ -583,9 +665,26 @@ export default function POSTerminal() {
                         <p className="font-bold text-slate-800 dark:text-slate-100 text-sm leading-tight truncate">
                           {item.product.name}
                         </p>
-                        <p className="text-xs text-slate-400 font-bold mt-0.5">
-                          ₡{item.product.salePrice.toLocaleString()} c/u
-                        </p>
+                         <div className="flex items-center gap-2 mt-0.5">
+                           <p className="text-xs text-slate-400 font-bold">
+                             ₡{item.product.salePrice.toLocaleString()} c/u
+                           </p>
+                           {item.exoneration ? (
+                             <button 
+                               onClick={() => removeExoneration(index)}
+                               className="text-[10px] font-black bg-blue-100 dark:bg-blue-900/30 text-blue-600 px-1.5 py-0.5 rounded uppercase tracking-tighter"
+                             >
+                               Exon: {item.exoneration.porcentaje}% (X)
+                             </button>
+                           ) : (
+                             <button 
+                               onClick={() => handleOpenExoneration(index)}
+                               className="text-[10px] font-black text-slate-400 hover:text-blue-500 uppercase tracking-tighter"
+                             >
+                               + Exonerar
+                             </button>
+                           )}
+                         </div>
                       </div>
 
                       {/* Qty controls */}
@@ -864,10 +963,11 @@ export default function POSTerminal() {
           cart={invoiceData.cart}
           client={invoiceData.client}
           change={invoiceData.change}
+          companySettings={settings}
           onClose={() => setInvoiceData(null)}
           onDownloadPDF={() => {
             import('../../utils/pdfGenerator').then(({ generateAndDownloadTicket }) => {
-              generateAndDownloadTicket(invoiceData.sale, invoiceData.cart, invoiceData.client)
+              generateAndDownloadTicket(invoiceData.sale, invoiceData.cart, invoiceData.client, settings)
                 .catch(() => toast.error('Error al generar PDF'));
             }).catch(() => toast.error('Error al generar PDF'));
             setInvoiceData(null);
@@ -933,8 +1033,129 @@ export default function POSTerminal() {
               </form>
             </motion.div>
           </div>
-        )}
-      </AnimatePresence>
-    </>
+         )}
+       </AnimatePresence>
+       <ExonerationModal 
+         isOpen={isExonerationModalOpen}
+         onClose={() => setIsExonerationModalOpen(false)}
+         tempExoneration={tempExoneration}
+         setTempExoneration={setTempExoneration}
+         onSave={saveExoneration}
+         cart={cart}
+         itemForExoneration={itemForExoneration}
+       />
+     </>
+   );
+}
+
+function ExonerationModal({ 
+  isOpen, 
+  onClose, 
+  tempExoneration, 
+  setTempExoneration, 
+  onSave, 
+  cart, 
+  itemForExoneration 
+}: any) {
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm">
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+            className="liquid-glass-panel w-full max-w-md p-6 shadow-2xl overflow-hidden"
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-black text-slate-900 dark:text-white">Detalles de Exoneración</h3>
+              <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tipo de Documento</label>
+                <select 
+                  className="liquid-input w-full"
+                  value={tempExoneration.tipoDocumento}
+                  onChange={e => setTempExoneration({ ...tempExoneration, tipoDocumento: e.target.value })}
+                >
+                  <option value="01">Compras Autorizadas</option>
+                  <option value="02">Ventas Exentas a Diplomáticos</option>
+                  <option value="03">Orden de Compra (Instituciones)</option>
+                  <option value="04">Exenciones MAG</option>
+                  <option value="05">Exenciones MINAE</option>
+                  <option value="99">Otros</option>
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Número de Documento</label>
+                <input 
+                  type="text" className="liquid-input w-full" placeholder="Ej: AL-00123"
+                  value={tempExoneration.numeroDocumento}
+                  onChange={e => setTempExoneration({ ...tempExoneration, numeroDocumento: e.target.value })}
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Institución</label>
+                <input 
+                  type="text" className="liquid-input w-full" placeholder="Ej: MAG, Cruz Roja..."
+                  value={tempExoneration.nombreInstitucion}
+                  onChange={e => setTempExoneration({ ...tempExoneration, nombreInstitucion: e.target.value })}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Fecha Emisión</label>
+                  <input 
+                    type="date" className="liquid-input w-full"
+                    value={tempExoneration.fechaEmision}
+                    onChange={e => setTempExoneration({ ...tempExoneration, fechaEmision: e.target.value })}
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">% Exonerado</label>
+                  <input 
+                    type="number" className="liquid-input w-full"
+                    value={tempExoneration.porcentaje}
+                    onChange={e => {
+                      const pct = parseFloat(e.target.value) || 0;
+                      const item = cart[itemForExoneration!];
+                      const sub = item.product.salePrice * item.qty;
+                      const suggestedMonto = (sub * pct) / 100;
+                      setTempExoneration({ ...tempExoneration, porcentaje: pct, monto: suggestedMonto });
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1 pt-2">
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Monto a Exonerar (CRC)</label>
+                  <span className="text-[10px] font-bold text-emerald-600">Sugerido: ₡{tempExoneration.monto.toLocaleString()}</span>
+                </div>
+                <input 
+                  type="number" className="liquid-input w-full text-lg font-black"
+                  value={tempExoneration.monto}
+                  onChange={e => setTempExoneration({ ...tempExoneration, monto: parseFloat(e.target.value) || 0 })}
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-8">
+              <button 
+                onClick={onClose}
+                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-2xl transition-colors"
+              >Cancelar</button>
+              <button 
+                onClick={onSave}
+                className="flex-1 py-3 text-sm font-black bg-premium-emerald text-white rounded-2xl shadow-lg shadow-premium-emerald/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
+              >Guardar Exoneración</button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
   );
 }

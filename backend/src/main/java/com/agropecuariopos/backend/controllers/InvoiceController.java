@@ -55,7 +55,7 @@ public class InvoiceController {
      */
     @PostMapping("/{saleId}/emit")
     @PreAuthorize("hasRole('ADMIN') or hasRole('CASHIER')")
-    public ResponseEntity<?> emitirFactura(@PathVariable Long saleId) {
+    public ResponseEntity<?> emitirFactura(@PathVariable @org.springframework.lang.NonNull Long saleId) {
         Sale sale = saleRepository.findById(saleId)
                 .orElseThrow(() -> new RuntimeException("Venta no encontrada: " + saleId));
 
@@ -108,7 +108,9 @@ public class InvoiceController {
     @GetMapping("/sale/{saleId}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('CASHIER')")
     public ResponseEntity<?> getInvoiceBySale(@PathVariable Long saleId) {
-        return invoiceRepository.findBySaleId(saleId)
+        return invoiceRepository.findBySaleId(saleId).stream()
+                .filter(inv -> inv.getTipoComprobante() == ElectronicInvoice.TipoComprobante.FACTURA_ELECTRONICA || inv.getTipoComprobante() == ElectronicInvoice.TipoComprobante.TIQUETE_ELECTRONICO)
+                .findFirst()
                 .map(invoice -> ResponseEntity.ok(Map.of(
                         "clave", invoice.getClave(),
                         "numeroConsecutivo", invoice.getNumeroConsecutivo(),
@@ -132,6 +134,29 @@ public class InvoiceController {
                 "clave", invoice.getClave(),
                 "estado", invoice.getEstado(),
                 "intentos", invoice.getIntentosEnvio()
+        ));
+    }
+
+    /**
+     * Emite una Nota de Crédito para anular una factura/tiquete de una venta.
+     * POST /api/invoices/sale/{saleId}/credit-note
+     */
+    @PostMapping("/sale/{saleId}/credit-note")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CASHIER')")
+    public ResponseEntity<?> emitirNotaCredito(@PathVariable @org.springframework.lang.NonNull Long saleId, @RequestBody(required = false) Map<String, String> payload) {
+        Sale sale = saleRepository.findById(saleId)
+                .orElseThrow(() -> new RuntimeException("Venta no encontrada: " + saleId));
+
+        String razon = (payload != null && payload.containsKey("razon")) ? payload.get("razon") : "Anulación de comprobante";
+        
+        ElectronicInvoice nc = haciendaInvoiceService.emitirNotaCredito(sale, razon);
+
+        return ResponseEntity.ok(Map.of(
+                "clave", nc.getClave(),
+                "numeroConsecutivo", nc.getNumeroConsecutivo(),
+                "tipo", nc.getTipoComprobante(),
+                "estado", nc.getEstado(),
+                "mensaje", "Nota de Crédito emitida correctamente"
         ));
     }
 

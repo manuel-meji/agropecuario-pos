@@ -4,10 +4,11 @@ import { getCompanySettings } from './companySettings';
 
 export const generateTicketPDF = (saleData: any, cart: any[], clientInfo?: any, companyData?: any): jsPDF => {
   // Nota: Esta función es síncrona para compatibilidad con el código existente.
-  // El QR se genera de forma síncrona usando el canvas interno de qrcode si está disponible,
+  // El QR se genera de forma asíncrona usando el canvas interno de qrcode si está disponible,
   // y se almacena en caché via saleData._qrDataUrl si se pre-generó con generateTicketPDFAsync.
   const company = companyData || getCompanySettings();
-  
+  const isTaxExempt = company.taxExempt === true || company.taxExempt === 'true';
+
   // Calculamos la altura dinámica del rollo (min aprox 140mm)
   const itemsHeight = cart.length * 5;
   const metaHeight = 90;
@@ -54,11 +55,12 @@ export const generateTicketPDF = (saleData: any, cart: any[], clientInfo?: any, 
   // ENCABEZADO
   drawTextCenter(company.businessName || 'Empresa', 10, true);
   y += 1;
-  drawTextCenter(`Vendedor: ${company.businessName}`, 8);
+  drawTextCenter(`Vendedor: ${company.cashierName || 'No especificado'}`, 8);
   if(company.legalId) drawTextCenter(`Cedula: ${company.legalId}`, 8);
   if(company.email) drawTextCenter(`Correo: ${company.email}`, 8);
   if(company.phone) drawTextCenter(`Telefono: ${company.phone}`, 8);
   if(company.address) drawTextCenter(company.address, 7);
+  if(isTaxExempt) drawTextCenter('*** REGIMEN EXENTO - SIN IVA ***', 7, true);
   
   y += 2;
   drawTextLeft(`Tipo Doc: ${saleData?.invoiceNumber ? 'Factura Electronica V4.4' : 'Tiquete POS'}`, 8);
@@ -108,7 +110,8 @@ export const generateTicketPDF = (saleData: any, cart: any[], clientInfo?: any, 
     const pUnit = Number(item.product.salePrice).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
     doc.text(pUnit, margin + 30, y);
     
-    const taxLetter = (item.product.taxRate === 0) ? 'E' : `G${item.product.taxRate ?? 13}`;
+    // When taxExempt, all items are Exento regardless of their taxRate
+    const taxLetter = (isTaxExempt || item.product.taxRate === 0) ? 'E' : `G${item.product.taxRate ?? 13}`;
     const total = (item.qty * item.product.salePrice).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
     const priceTxt = `${total} ${taxLetter}`;
     doc.text(priceTxt, 58 - margin - doc.getTextWidth(priceTxt), y);
@@ -118,10 +121,18 @@ export const generateTicketPDF = (saleData: any, cart: any[], clientInfo?: any, 
 
   y += 2;
   
-  // Totales
+  // Calcular el descuento: prioridad a totalDiscount / discountAmount,
+  // si ambos son 0 se deriva de la diferencia de totales para cuando el
+  // descuento global se aplicó a nivel de venta pero no se propagó como campo.
   const subTotal = (saleData?.subtotal || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-  const descuento = ((saleData?.totalDiscount || saleData?.discountAmount) || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-  const iva = (saleData?.totalTax || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  const rawDiscount = (saleData?.totalDiscount ?? 0) || (saleData?.discountAmount ?? 0);
+  const subtotalNum = saleData?.subtotal || 0;
+  const finalTotalNum = saleData?.finalTotal || saleData?.total || 0;
+  const taxNum = saleData?.totalTax || 0;
+  const derivedDiscount = rawDiscount > 0 ? rawDiscount : Math.max(0, subtotalNum - (finalTotalNum - taxNum));
+  const descuento = derivedDiscount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  // When taxExempt, force IVA to 0
+  const iva = isTaxExempt ? '0.00' : (saleData?.totalTax || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
   const grantTotal = (saleData?.finalTotal || saleData?.total || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
   
   const drawTotalLine = (label: string, val: string, isBold = false) => {
@@ -134,7 +145,7 @@ export const generateTicketPDF = (saleData: any, cart: any[], clientInfo?: any, 
   
   drawTotalLine("Sub-Total", subTotal, true);
   drawTotalLine("Descuento", descuento, true);
-  drawTotalLine("IVA", iva, true);
+  drawTotalLine(isTaxExempt ? "IVA (Exento)" : "IVA", iva, true);
   
   y += 2;
   drawLine();

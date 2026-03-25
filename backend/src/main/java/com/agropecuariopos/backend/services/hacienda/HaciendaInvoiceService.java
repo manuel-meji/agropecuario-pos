@@ -7,10 +7,8 @@ import com.agropecuariopos.backend.repositories.SaleRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -28,11 +26,8 @@ public class HaciendaInvoiceService {
     public static final String TIPO_NOTA_CREDITO = "03";
     public static final String TIPO_TIQUETE = "04";
 
-    @Value("${hacienda.crypto.keystore.path}")
-    private String p12Path;
-
-    @Value("${hacienda.crypto.keystore.password}")
-    private String p12Password;
+    @Autowired
+    private com.agropecuariopos.backend.repositories.CompanySettingsRepository settingsRepository;
 
     @Autowired
     private ClaveHaciendaService claveService;
@@ -76,7 +71,10 @@ public class HaciendaInvoiceService {
      */
     public ElectronicInvoice emitirComprobante(Sale sale) {
         // ¿Ya tiene un comprobante ACEPTADO?
-        invoiceRepository.findBySaleId(sale.getId()).ifPresent(existing -> {
+        invoiceRepository.findBySaleId(sale.getId()).stream()
+                .filter(inv -> inv.getTipoComprobante() == ElectronicInvoice.TipoComprobante.FACTURA_ELECTRONICA || inv.getTipoComprobante() == ElectronicInvoice.TipoComprobante.TIQUETE_ELECTRONICO)
+                .findFirst()
+                .ifPresent(existing -> {
             if (existing.getEstado() == ElectronicInvoice.EstadoComprobante.ACEPTADO) {
                 throw new IllegalStateException("Esta venta ya tiene un comprobante ACEPTADO. Clave: " + existing.getClave());
             }
@@ -99,17 +97,10 @@ public class HaciendaInvoiceService {
         logger.info("Clave generada: {} | Consecutivo: {}", clave50, numeroConsecutivo);
 
         // PASO 2: Construir XML v4.4
-        String xmlRaw = xmlGenerator.buildInvoiceXML(sale, numeroConsecutivo, clave50);
-        logger.info("XML generado correctamente ({} chars)", xmlRaw.length());
-        // LOG DIAGNÓSTICO — muestra el XML completo antes de firmar (quitar en producción)
-        logger.warn("🔍 XML GENERADO (sin firma):\n{}", xmlRaw);
-
-        // PASO 3: Firmar con XAdES usando el .p12 de Hacienda
-        String xmlFirmado = xadesService.signXmlDocument(xmlRaw, p12Path, p12Password);
-        logger.info("XML firmado exitosamente con certificado .p12");
-
-        // PASO 4: Persistir comprobante en estado PENDIENTE
+        // Persistir comprobante temporalmente para pasar la entidad al generador
         ElectronicInvoice invoice = invoiceRepository.findBySaleId(sale.getId())
+                .stream().filter(inv -> inv.getTipoComprobante() == tipoComprobante)
+                .findFirst()
                 .orElse(new ElectronicInvoice());
 
         invoice.setSale(sale);
@@ -117,6 +108,25 @@ public class HaciendaInvoiceService {
         invoice.setNumeroConsecutivo(numeroConsecutivo);
         invoice.setTipoComprobante(tipoComprobante);
         invoice.setEstado(ElectronicInvoice.EstadoComprobante.PENDIENTE);
+        invoice = invoiceRepository.save(invoice);
+
+        String xmlRaw = xmlGenerator.buildDocumentXML(invoice);
+        logger.info("XML generado correctamente ({} chars)", xmlRaw.length());
+        // LOG DIAGNÓSTICO — muestra el XML completo antes de firmar (quitar en producción)
+        logger.warn("🔍 XML GENERADO (sin firma):\n{}", xmlRaw);
+
+        // PASO 3: Firmar con XAdES usando el .p12 de Hacienda desde BD
+        com.agropecuariopos.backend.models.CompanySettings settings = settingsRepository.findFirst()
+                .orElseThrow(() -> new RuntimeException("No se encontró la configuración de la empresa para firmar."));
+        
+        if (settings.getHaciendaKeystoreFile() == null) {
+            throw new RuntimeException("No se ha cargado el certificado .p12 en la configuración.");
+        }
+
+        String xmlFirmado = xadesService.signXmlDocument(xmlRaw, settings.getHaciendaKeystoreFile(), settings.getHaciendaKeystorePassword());
+        logger.info("XML firmado exitosamente con certificado .p12");
+
+        // PASO 4: Actualizar comprobante con el XML firmado
         invoice.setXmlGenerado(xmlRaw);
         invoice.setXmlFirmadoBase64(xmlFirmado);
         invoice = invoiceRepository.save(invoice);
@@ -126,11 +136,78 @@ public class HaciendaInvoiceService {
             submissionService.enviarComprobante(invoice);
             logger.info("✅ Comprobante enviado a Hacienda. Estado: {}", invoice.getEstado());
         } catch (Exception e) {
-            logger.error("⚠️ Error enviando a Hacienda (contingencia activada): {}", e.getMessage());
+            logger.error("⚠️ Error crítico enviando a Hacienda (contingencia activada): {}", e.getMessage(), e);
             // No propagar — el daemon de polling reintentará automáticamente
         }
 
         return invoice;
+    }
+
+    /**
+     * Emite una Nota de Crédito Electrónica para anular una Factura o Tiquete previamente generado.
+     */
+    @Transactional
+    public ElectronicInvoice emitirNotaCredito(Sale sale, String razon) {
+        // 1. Buscar el comprobante original que se va a anular (debe estar ACEPTADO)
+        ElectronicInvoice facturaOriginal = invoiceRepository.findBySaleId(sale.getId()).stream()
+                .filter(inv -> inv.getEstado() == ElectronicInvoice.EstadoComprobante.ACEPTADO || inv.getEstado() == ElectronicInvoice.EstadoComprobante.ENVIADO)
+                .findFirst() // Al ser ManyToOne ahora, tomamos el primero (que debería ser la Factura o Tiquete)
+                .orElseThrow(() -> new IllegalStateException("No se encontró factura original ACEPTADA para anular."));
+
+        logger.info("🧾 Iniciando emisión NOTA_CREDITO para venta ID {}", sale.getId());
+
+        // 2. Generar nuevo consecutivo y clave (tipo 03)
+        String numeroConsecutivo = claveService.generarConsecutivo(TIPO_NOTA_CREDITO);
+        String clave50 = claveService.generarClaveConConsecutivo(TIPO_NOTA_CREDITO, numeroConsecutivo, 1);
+
+        logger.info("Clave generada para NC: {} | Consecutivo: {}", clave50, numeroConsecutivo);
+
+        // 3. Crear el nuevo registro de ElectronicInvoice (la Nota de Crédito)
+        ElectronicInvoice ncInvoice = new ElectronicInvoice();
+        ncInvoice.setSale(sale);
+        ncInvoice.setClave(clave50);
+        ncInvoice.setNumeroConsecutivo(numeroConsecutivo);
+        ncInvoice.setTipoComprobante(ElectronicInvoice.TipoComprobante.NOTA_CREDITO);
+        ncInvoice.setEstado(ElectronicInvoice.EstadoComprobante.PENDIENTE);
+        
+        // Asignar los datos de referencia
+        String tipoDocOriginal = facturaOriginal.getTipoComprobante() == ElectronicInvoice.TipoComprobante.FACTURA_ELECTRONICA ? TIPO_FACTURA : TIPO_TIQUETE;
+        ncInvoice.setReferenciaTipoDocumento(tipoDocOriginal);
+        ncInvoice.setReferenciaClave(facturaOriginal.getClave());
+        ncInvoice.setReferenciaFechaEmision(facturaOriginal.getCreatedAt());
+        ncInvoice.setReferenciaCodigo("01"); // 01 = Anula documento de referencia
+        ncInvoice.setReferenciaRazon(razon != null ? razon : "Anulación de comprobante");
+        
+        ncInvoice = invoiceRepository.save(ncInvoice);
+
+        // 4. Construir XML v4.4 pasando la entidad ncInvoice para que el generador acceda a las referencias
+        String xmlRaw = xmlGenerator.buildDocumentXML(ncInvoice);
+        logger.info("XML de Nota de Crédito generado correctamente");
+
+        // 5. Firmar
+        com.agropecuariopos.backend.models.CompanySettings settingsNC = settingsRepository.findFirst()
+                .orElseThrow(() -> new RuntimeException("No se encontró la configuración de la empresa para firmar NC."));
+        
+        if (settingsNC.getHaciendaKeystoreFile() == null) {
+            throw new RuntimeException("No se ha cargado el certificado .p12 en la configuración.");
+        }
+
+        String xmlFirmado = xadesService.signXmlDocument(xmlRaw, settingsNC.getHaciendaKeystoreFile(), settingsNC.getHaciendaKeystorePassword());
+
+        // 6. Actualizar y persistir
+        ncInvoice.setXmlGenerado(xmlRaw);
+        ncInvoice.setXmlFirmadoBase64(xmlFirmado);
+        ncInvoice = invoiceRepository.save(ncInvoice);
+
+        // 7. Enviar a Hacienda
+        try {
+            submissionService.enviarComprobante(ncInvoice);
+            logger.info("✅ NC enviada a Hacienda. Estado: {}", ncInvoice.getEstado());
+        } catch (Exception e) {
+            logger.error("⚠️ Error enviando NC a Hacienda: {}", e.getMessage());
+        }
+
+        return ncInvoice;
     }
 
     /**

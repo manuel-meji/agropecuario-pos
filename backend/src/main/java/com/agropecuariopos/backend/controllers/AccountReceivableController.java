@@ -11,7 +11,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.util.*;
-import java.util.*;
 import java.util.stream.Collectors;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -150,7 +149,7 @@ public class AccountReceivableController {
 
         @PostMapping("/{id}/pay")
         @Transactional
-        public AccountReceivableResponse makePayment(@PathVariable Long id, @RequestBody PaymentRequest request) {
+        public AccountReceivableResponse makePayment(@PathVariable @org.springframework.lang.NonNull Long id, @RequestBody PaymentRequest request) {
                 AccountReceivable receivable = accountReceivableRepository.findById(id).orElseThrow();
 
                 BigDecimal previousBalance = receivable.getRemainingBalance();
