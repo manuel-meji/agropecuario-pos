@@ -88,6 +88,7 @@ public class AccountPayableController {
         record.setPaymentDate(LocalDateTime.now());
         record.setPreviousBalance(previousBalance);
         record.setNewBalance(saved.getRemainingBalance());
+        record.setPaymentMethod(request.getPaymentMethod());
         paymentRecordRepository.save(record);
 
         // Automatically create a daily expense
@@ -96,6 +97,7 @@ public class AccountPayableController {
         expense.setCategory(DailyExpense.ExpenseCategory.SUPPLIER_PAYMENT);
         expense.setDescription("Pago a Proveedor: " + saved.getSupplierName());
         expense.setIsDeductibleFromProfit(true);
+        expense.setPaymentMethod(request.getPaymentMethod());
         // Do NOT set registeredDate, JPA auditing will handle it. If we set it, it might interfere or we can just let auditing do it.
         // Also removed expense.setRegisteredDate(LocalDateTime.now()); because it's not needed and can cause conflicts.
         dailyExpenseRepository.save(expense);
@@ -109,7 +111,7 @@ public class AccountPayableController {
     public org.springframework.http.ResponseEntity<?> makeBulkPayment(@PathVariable String supplierName,
             @RequestBody PaymentRequest request) {
         List<AccountPayable> payables = accountPayableRepository.findBySupplierName(supplierName);
-        processBulkPayment(payables, request.getAmount(), supplierName);
+        processBulkPayment(payables, request.getAmount(), supplierName, request.getPaymentMethod());
         return org.springframework.http.ResponseEntity.ok(Collections.singletonMap("message", "Abono masivo procesado exitosamente"));
     }
 
@@ -124,13 +126,14 @@ public class AccountPayableController {
         String supplierLabel = payables.isEmpty()
                 ? "Proveedor #" + supplierId
                 : payables.get(0).getSupplierName();
-        processBulkPayment(payables, request.getAmount(), supplierLabel);
+        processBulkPayment(payables, request.getAmount(), supplierLabel, request.getPaymentMethod());
         return org.springframework.http.ResponseEntity.ok(Collections.singletonMap("message", "Abono masivo procesado exitosamente"));
     }
 
     /** Shared logic: apply a bulk payment across a list of payables (oldest-first). */
     private List<AccountPayable> processBulkPayment(List<AccountPayable> payables,
-            double amountDouble, String supplierLabel) {
+            double amountDouble, String supplierLabel,
+            com.agropecuariopos.backend.models.PaymentRecord.PaymentMethod paymentMethod) {
         payables.sort((p1, p2) -> p1.getId().compareTo(p2.getId()));
 
         BigDecimal remainingPayment = BigDecimal.valueOf(amountDouble);
@@ -159,6 +162,7 @@ public class AccountPayableController {
                 record.setPaymentDate(LocalDateTime.now());
                 record.setPreviousBalance(previousBalance);
                 record.setNewBalance(saved.getRemainingBalance());
+                record.setPaymentMethod(paymentMethod);
                 paymentRecordRepository.save(record);
 
                 remainingPayment = remainingPayment.subtract(amountToApply);
@@ -173,6 +177,7 @@ public class AccountPayableController {
             expense.setCategory(DailyExpense.ExpenseCategory.SUPPLIER_PAYMENT);
             expense.setDescription("Pago a Proveedor: " + supplierLabel);
             expense.setIsDeductibleFromProfit(true);
+            expense.setPaymentMethod(paymentMethod);
             dailyExpenseRepository.save(expense);
         }
 

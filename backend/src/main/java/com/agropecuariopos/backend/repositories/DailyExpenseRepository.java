@@ -15,4 +15,6 @@ public interface DailyExpenseRepository extends JpaRepository<DailyExpense, Long
     @Query("SELECT COALESCE(SUM(e.amount), 0) FROM DailyExpense e WHERE e.isDeductibleFromProfit = true AND e.registeredDate BETWEEN :startDate AND :endDate")
     BigDecimal sumDeductibleExpensesBetweenDates(@Param("startDate") LocalDateTime startDate,
             @Param("endDate") LocalDateTime endDate);
+
+    java.util.List<DailyExpense> findByRegisteredDateBetween(LocalDateTime startDate, LocalDateTime endDate);
 }

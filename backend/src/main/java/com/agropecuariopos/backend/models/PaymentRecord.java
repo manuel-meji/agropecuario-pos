@@ -39,4 +39,13 @@ public class PaymentRecord {
 
     @Column(precision = 12, scale = 2)
     private BigDecimal newBalance;
+
+    /** Medio de pago del abono: CASH, CARD, SINPE_MOVIL, TRANSFER, etc. */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 30)
+    private PaymentMethod paymentMethod;
+
+    public enum PaymentMethod {
+        CASH, CARD, SINPE_MOVIL, TRANSFER
+    }
 }

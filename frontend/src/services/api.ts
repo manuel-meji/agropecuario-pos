@@ -47,9 +47,9 @@ export const getReceivables = () => api.get('/accounts-receivable').then(res => 
 export const getReceivablesByClient = () => api.get('/accounts-receivable/by-client').then(res => res.data);
 export const getClientHistory = (clientName: string) => api.get(`/accounts-receivable/${encodeURIComponent(clientName)}/history`).then(res => res.data);
 export const getClientHistoryByClientId = (clientId: number) => api.get(`/clients/${clientId}/history`).then(res => res.data);
-export const makePayment = (id: number, amount: number) => api.post(`/accounts-receivable/${id}/pay`, { amount }).then(res => res.data);
+export const makePayment = (id: number, amount: number, paymentMethod?: string) => api.post(`/accounts-receivable/${id}/pay`, { amount, paymentMethod }).then(res => res.data);
 export const getPaymentRecords = () => api.get('/accounts-receivable/payments').then(res => res.data);
-export const makeClientBulkPayment = (clientName: string, amount: number) => api.post(`/accounts-receivable/client/${encodeURIComponent(clientName)}/pay`, { amount }).then(res => res.data);
+export const makeClientBulkPayment = (clientName: string, amount: number, paymentMethod?: string) => api.post(`/accounts-receivable/client/${encodeURIComponent(clientName)}/pay`, { amount, paymentMethod }).then(res => res.data);
 
 // Purchases
 export const getPurchases = () => api.get('/purchases').then(res => res.data);
@@ -61,7 +61,7 @@ export const getPayables = () => api.get('/accounts-payable').then(res => res.da
 /** Get all payables for a supplier by their immutable ID (survives name changes). */
 export const getPayableHistory = (supplierId: number) => api.get(`/accounts-payable/by-supplier/${supplierId}`).then(res => res.data);
 export const getSupplierHistory = (supplierId: number) => api.get(`/suppliers/${supplierId}/history`).then(res => res.data);
-export const makePayablePayment = (id: number, amount: number) => api.post(`/accounts-payable/${id}/pay`, { amount }).then(res => res.data);
+export const makePayablePayment = (id: number, amount: number, paymentMethod?: string) => api.post(`/accounts-payable/${id}/pay`, { amount, paymentMethod }).then(res => res.data);
 // CABYS
 export const getCabysSearch = (query: string) => api.get('/cabys/search', { params: { query } }).then(res => res.data);
 export const getCabysByCode = (code: string) => api.get(`/cabys/${code}`).then(res => res.data);
@@ -72,8 +72,8 @@ export const getPayablePaymentRecords = async () => {
 };
 
 /** Bulk payment for a supplier using their immutable ID (survives name changes). */
-export const makeSupplierBulkPayment = async (supplierId: number, amount: number) => {
-  const response = await api.post(`/accounts-payable/by-supplier/${supplierId}/pay`, { amount });
+export const makeSupplierBulkPayment = async (supplierId: number, amount: number, paymentMethod?: string) => {
+  const response = await api.post(`/accounts-payable/by-supplier/${supplierId}/pay`, { amount, paymentMethod });
   return response.data;
 };
 // Cash Closing
@@ -143,6 +143,8 @@ export const updateConsecutive = (tipoDocumento: string, ultimoConsecutivo: numb
 
 export const exportSentInvoicesZip = (desde?: string, hasta?: string) =>
   api.get('/invoices/export-zip', { params: { desde, hasta }, responseType: 'blob' }).then(res => res.data);
+
+export const getRecentInvoices = () => api.get('/invoices/recent').then(res => res.data);
 
 // ─── Notas de Crédito (Anulaciones) ───────────────────────────────────────
 export const issueCreditNote = (saleId: number, razon: string) =>

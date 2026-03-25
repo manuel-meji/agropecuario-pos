@@ -29,6 +29,9 @@ public class CashClosingDTO {
     private BigDecimal totalTax;
     private BigDecimal totalGrossProfit;
     private BigDecimal totalExpenses;
+    private BigDecimal totalCashExpense;
+    private BigDecimal totalCardExpense;
+    private BigDecimal totalSinpeExpense;
     private BigDecimal netCash;
 
     // Counts

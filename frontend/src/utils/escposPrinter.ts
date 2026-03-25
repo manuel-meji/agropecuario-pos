@@ -1,7 +1,7 @@
 import { getCompanySettings } from './companySettings';
 
-export const generateEscPosReceipt = (sale: any, cart: any[], client?: any, taxExempt?: boolean) => {
-  const company = getCompanySettings();
+export const generateEscPosReceipt = async (sale: any, cart: any[], client?: any, taxExempt?: boolean) => {
+  const company = await getCompanySettings();
   
   let text = '';
   // Centrar titulo

@@ -62,6 +62,13 @@ public class HaciendaAuthClientService {
             return currentToken;
         }
 
+        System.out.println("=== HACIENDA AUTH DEBUG ===");
+        System.out.println("User: " + username);
+        System.out.println("Pass: " + password);
+        System.out.println("Client ID: " + clientId);
+        System.out.println("URL: " + tokenUrl);
+        System.out.println("===========================");
+
         logger.info("Solicitando nuevo token OIDC a Ministerio de Hacienda...");
 
         // Configurar RestTemplate con timeouts para evitar bloqueos

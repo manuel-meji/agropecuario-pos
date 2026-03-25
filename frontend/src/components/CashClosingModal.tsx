@@ -22,6 +22,9 @@ interface CashClosingData {
   totalTax: number;
   totalGrossProfit: number;
   totalExpenses: number;
+  totalCashExpense?: number;
+  totalCardExpense?: number;
+  totalSinpeExpense?: number;
   netCash: number;
   numberOfSales: number;
   numberOfPayments: number;
@@ -194,12 +197,56 @@ export default function CashClosingModal({ isOpen, onClose }: Props) {
                   {/* ── Payment Method Breakdown ────────────────────────── */}
                   <div className="bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-6 border border-slate-100 dark:border-slate-700/50">
                     <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-5">Ingresos por Método de Pago</h3>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {[
                         { label: 'Efectivo', value: data.totalCash, icon: Banknote, bg: 'bg-green-100 dark:bg-green-900/20', text: 'text-green-700 dark:text-green-400', iconBg: 'bg-green-500' },
                         { label: 'Tarjeta', value: data.totalCard, icon: CreditCard, bg: 'bg-blue-100 dark:bg-blue-900/20', text: 'text-blue-700 dark:text-blue-400', iconBg: 'bg-blue-500' },
                         { label: 'SINPE Móvil', value: data.totalSinpe, icon: Smartphone, bg: 'bg-purple-100 dark:bg-purple-900/20', text: 'text-purple-700 dark:text-purple-400', iconBg: 'bg-purple-500' },
                         { label: 'Crédito', value: data.totalCredit, icon: Wallet, bg: 'bg-amber-100 dark:bg-amber-900/20', text: 'text-amber-700 dark:text-amber-400', iconBg: 'bg-amber-500' },
+                      ].map(({ label, value, icon: Icon, bg, text, iconBg }) => (
+                        <div key={label} className={`flex items-center gap-4 p-4 rounded-xl ${bg}`}>
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white ${iconBg} shrink-0`}>
+                            <Icon size={18} />
+                          </div>
+                          <div>
+                            <p className={`text-[10px] font-black uppercase tracking-wider ${text}`}>{label}</p>
+                            <p className={`text-lg font-black ${text}`}>{fmt(value)}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* ── Gastos Breakdown ────────────────────────── */}
+                  <div className="bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-6 border border-slate-100 dark:border-slate-700/50">
+                    <h3 className="text-xs font-black text-rose-400 uppercase tracking-widest mb-5">Gastos por Método de Pago</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {[
+                        { label: 'Efectivo', value: data.totalCashExpense || 0, icon: Banknote, bg: 'bg-rose-100 dark:bg-rose-900/20', text: 'text-rose-700 dark:text-rose-400', iconBg: 'bg-rose-500' },
+                        { label: 'Tarjeta', value: data.totalCardExpense || 0, icon: CreditCard, bg: 'bg-rose-100 dark:bg-rose-900/20', text: 'text-rose-700 dark:text-rose-400', iconBg: 'bg-rose-500' },
+                        { label: 'SINPE Móvil', value: data.totalSinpeExpense || 0, icon: Smartphone, bg: 'bg-rose-100 dark:bg-rose-900/20', text: 'text-rose-700 dark:text-rose-400', iconBg: 'bg-rose-500' },
+                      ].map(({ label, value, icon: Icon, bg, text, iconBg }) => (
+                        <div key={label} className={`flex items-center gap-4 p-4 rounded-xl ${bg}`}>
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white ${iconBg} shrink-0`}>
+                            <Icon size={18} />
+                          </div>
+                          <div>
+                            <p className={`text-[10px] font-black uppercase tracking-wider ${text}`}>{label}</p>
+                            <p className={`text-lg font-black ${text}`}>{fmt(value)}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* ── Total Disponible Breakdown ────────────────────────── */}
+                  <div className="bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-6 border border-slate-100 dark:border-slate-700/50">
+                    <h3 className="text-xs font-black text-emerald-500 uppercase tracking-widest mb-5">Total en Caja (Ingresos - Gastos)</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {[
+                        { label: 'Efectivo Neto', value: (data.totalCash || 0) - (data.totalCashExpense || 0), icon: Banknote, bg: 'bg-emerald-100 dark:bg-emerald-900/20', text: 'text-emerald-700 dark:text-emerald-400', iconBg: 'bg-emerald-500' },
+                        { label: 'Tarjeta Neto', value: (data.totalCard || 0) - (data.totalCardExpense || 0), icon: CreditCard, bg: 'bg-emerald-100 dark:bg-emerald-900/20', text: 'text-emerald-700 dark:text-emerald-400', iconBg: 'bg-emerald-500' },
+                        { label: 'SINPE Neto', value: (data.totalSinpe || 0) - (data.totalSinpeExpense || 0), icon: Smartphone, bg: 'bg-emerald-100 dark:bg-emerald-900/20', text: 'text-emerald-700 dark:text-emerald-400', iconBg: 'bg-emerald-500' },
                       ].map(({ label, value, icon: Icon, bg, text, iconBg }) => (
                         <div key={label} className={`flex items-center gap-4 p-4 rounded-xl ${bg}`}>
                           <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white ${iconBg} shrink-0`}>
@@ -254,7 +301,7 @@ export default function CashClosingModal({ isOpen, onClose }: Props) {
                       <div className="mt-4 pt-4 border-t-2 border-slate-900 dark:border-white flex justify-between items-center">
                         <div>
                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Caja Neta del Día</p>
-                          <p className="text-xs text-slate-400 font-bold">Efectivo + Tarjeta + SINPE + Abonos − Gastos</p>
+                          <p className="text-xs text-slate-400 font-bold">Efectivo + Tarjeta + SINPE − Gastos</p>
                         </div>
                         <p className={`text-3xl font-black ${Number(data.netCash) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{fmt(data.netCash)}</p>
                       </div>

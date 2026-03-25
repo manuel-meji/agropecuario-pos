@@ -40,4 +40,10 @@ public class PayablePaymentRecord {
 
     @Column(precision = 12, scale = 2)
     private BigDecimal newBalance;
+
+    /** Medio de pago del abono: CASH, CARD, SINPE_MOVIL, TRANSFER, etc. */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 30)
+    private com.agropecuariopos.backend.models.PaymentRecord.PaymentMethod paymentMethod;
 }
+

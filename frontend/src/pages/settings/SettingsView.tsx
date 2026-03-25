@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Building2, Save, X, Server, ShieldCheck, Cloud, HardDrive } from 'lucide-react';
+import { Building2, Save, X, Server, ShieldCheck, Cloud, HardDrive, Wallet, CheckCircle2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getCompanySettings, saveCompanySettings, uploadCertificate, CompanySettings } from '../../utils/companySettings';
 import { getConsecutive, updateConsecutive } from '../../services/api';
@@ -122,6 +122,12 @@ export default function SettingsView() {
                <HardDrive size={20} /> Hardware & Tiqueteras
             </button>
             <button 
+               onClick={() => setActiveTab('payments')}
+               className={`flex items-center gap-3 w-full p-3 rounded-lg transition-all text-left ${activeTab === 'payments' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 font-semibold' : 'text-gray-600 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/5'}`}
+            >
+               <Wallet size={20} /> Billeteras & Pagos
+            </button>
+            <button 
                onClick={() => setActiveTab('advanced')}
                className={`flex items-center gap-3 w-full p-3 rounded-lg transition-all text-left ${activeTab === 'advanced' ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 font-semibold' : 'text-gray-600 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/5'}`}
             >
@@ -130,7 +136,54 @@ export default function SettingsView() {
          </div>
 
          {/* Panel de Contenido */}
-         <div className="flex-1 liquid-glass-panel p-6 overflow-y-auto custom-scrollbar relative">
+         <div className="flex-1 liquid-glass-panel p-6 overflow-y-auto custom-scrollbar relative">              {activeTab === 'payments' && (
+                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-8 max-w-3xl">
+                   <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 flex gap-4">
+                      <div className="p-2 bg-amber-100 dark:bg-amber-900/50 rounded-lg text-amber-600 dark:text-amber-400 h-fit">
+                         <Wallet size={24} />
+                      </div>
+                      <div>
+                         <h4 className="font-bold text-amber-900 dark:text-amber-300">Configuración de Billeteras</h4>
+                         <p className="text-sm text-amber-700 dark:text-amber-400/80 mt-1">Activa o desactiva los medios de pago disponibles en el sistema. Los métodos desactivados no aparecerán en el POS ni en cierres de caja.</p>
+                      </div>
+                   </div>
+
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {[
+                        { id: 'CASH', label: 'Efectivo', desc: 'Cobros físicos en billetes y monedas' },
+                        { id: 'SINPE_MOVIL', label: 'SINPE Móvil', desc: 'Transferencias rápidas vía número telefónico' },
+                        { id: 'CARD', label: 'Tarjeta', desc: 'Cobros vía Datáfono (Visa/Mastercard)' },
+                        { id: 'TRANSFER', label: 'Transferencia', desc: 'Depósitos bancarios directos' },
+                        { id: 'CREDIT', label: 'Venta a Crédito', desc: 'Permitir que ciertos clientes compren a crédito' }
+                      ].map(method => {
+                        const isEnabled = settings.enabledPaymentMethods?.includes(method.id);
+                        return (
+                          <div 
+                            key={method.id}
+                            onClick={() => {
+                              const current = settings.enabledPaymentMethods || [];
+                              const next = isEnabled 
+                                ? current.filter(m => m !== method.id)
+                                : [...current, method.id];
+                              handleChange('enabledPaymentMethods', next);
+                            }}
+                            className={`group cursor-pointer p-4 rounded-2xl border-2 transition-all flex items-start gap-4 ${isEnabled ? 'bg-amber-500/5 border-amber-500/30' : 'bg-slate-50 dark:bg-slate-900/50 border-transparent opacity-60 hover:opacity-100 hover:border-slate-200 dark:hover:border-slate-800'}`}
+                          >
+                            <div className={`mt-1 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${isEnabled ? 'bg-amber-500 border-amber-500' : 'border-slate-300 dark:border-slate-600'}`}>
+                              {isEnabled && <CheckCircle2 size={12} className="text-white" />}
+                            </div>
+                            <div className="flex-1">
+                               <p className={`font-black uppercase tracking-widest text-xs ${isEnabled ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500'}`}>{method.label}</p>
+                               <p className="text-[11px] text-slate-400 font-medium mt-0.5 leading-relaxed">{method.desc}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                   </div>
+                </motion.div>
+              )}
+
+
              
              {activeTab === 'hacienda' && (
                 <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-8 max-w-3xl">

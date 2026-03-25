@@ -50,6 +50,9 @@ public class SaleController {
     private AccountReceivableRepository accountReceivableRepository;
 
     @Autowired
+    private com.agropecuariopos.backend.repositories.UserRepository userRepository;
+
+    @Autowired
     private PasswordEncoder encoder;
 
     @Autowired
@@ -154,7 +157,12 @@ public class SaleController {
         }
 
         UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
-        if (!encoder.matches(deleteRequest.getPassword(), userDetails.getPassword())) {
+        
+        // Cargar el usuario fresco desde la DB para asegurar que el hash esté disponible
+        com.agropecuariopos.backend.models.User user = userRepository.findById(userDetails.getId())
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+
+        if (!encoder.matches(deleteRequest.getPassword(), user.getPassword())) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body("Contraseña incorrecta. No se puede eliminar la venta.");
         }
@@ -169,6 +177,12 @@ public class SaleController {
         // Eliminar cuenta por cobrar si existía
         Optional<AccountReceivable> receivable = accountReceivableRepository.findByRelatedSale(sale);
         receivable.ifPresent(accountReceivableRepository::delete);
+
+        // Eliminar facturas electrónicas asociadas para evitar restricción de llave foránea
+        List<ElectronicInvoice> invoices = electronicInvoiceRepository.findBySaleId(id);
+        if (!invoices.isEmpty()) {
+            electronicInvoiceRepository.deleteAll(invoices);
+        }
 
         // Eliminar la venta
         saleRepository.delete(sale);

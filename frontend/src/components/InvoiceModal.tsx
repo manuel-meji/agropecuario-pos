@@ -82,7 +82,7 @@ export default function InvoiceModal({ isOpen, saleData, cart, client, change, o
       const mode = company.printMode || 'browser';
       if (mode === 'escpos' && company.printerName) {
         toast.loading('Enviando a impresora...', { id: 'print' });
-        const text = generateEscPosReceipt(saleData, cart, client, isTaxExempt);
+        const text = await generateEscPosReceipt(saleData, cart, client, isTaxExempt);
         await printToEscPos(text, company.printerName);
         toast.success('¡Impreso!', { id: 'print' });
       } else {

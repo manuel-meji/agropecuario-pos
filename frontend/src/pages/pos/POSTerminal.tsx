@@ -1,11 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
+import {useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Search, Barcode, Plus, Minus, CreditCard, Banknote,
-  ShoppingCart, User, Smartphone, X, Wallet, Percent,
-  DollarSign, ChevronDown, Tag, Trash2, FileText
+  Search, Barcode, Plus, Minus, ShoppingCart, User, X, Percent,
+  DollarSign, ChevronDown, Tag, Trash2, FileText, Banknote
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getCompanySettings } from '../../utils/companySettings';
+import { getPaymentMethodMeta } from '../../components/PaymentMethodSelector';
 import { getProducts, createSale, getClients, createClient } from '../../services/api';
 import InvoiceModal from '../../components/InvoiceModal';
 
@@ -169,6 +170,7 @@ export default function POSTerminal() {
   const [isClientPickerOpen, setIsClientPickerOpen] = useState(false);
   const [clientSearchTerm, setClientSearchTerm] = useState('');
   const [showPaymentMethods, setShowPaymentMethods] = useState(false);
+  const [enabledMethods, setEnabledMethods] = useState<string[]>([]);
   const [isCredit, setIsCredit] = useState(false);
   const [generateElectronicInvoice, setGenerateElectronicInvoice] = useState(true);
   // Client creation inline
@@ -192,30 +194,24 @@ export default function POSTerminal() {
   });
 
   useEffect(() => {
-    const loadSettings = async () => {
+    async function init() {
       try {
-        const { getCompanySettings } = await import('../../utils/companySettings');
-        const s = await getCompanySettings();
-        setSettings(s);
-      } catch (e) {
-        console.error('Error loading settings', e);
-      }
-    };
-    loadSettings();
-  }, []);
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const prodData = await getProducts();
+        const [prodData, clientData, companySettings] = await Promise.all([
+          getProducts(),
+          getClients(),
+          getCompanySettings()
+        ]);
         setProducts(prodData);
-      } catch (e) { console.error('Error loading products', e); }
-      try {
-        const clientData = await getClients();
         setClients(clientData);
-      } catch (e) { console.error('Error loading clients', e); }
-    };
-    load();
+        setSettings(companySettings);
+        if (companySettings.enabledPaymentMethods) {
+          setEnabledMethods(companySettings.enabledPaymentMethods);
+        }
+      } catch (e) {
+        console.error('Error initializing POS', e);
+      }
+    }
+    init();
   }, []);
 
   /* Client Creation */
@@ -748,23 +744,10 @@ export default function POSTerminal() {
             {/* Discount toggle */}
             <InlineDiscount subtotal={subtotal} discount={discount} onChange={setDiscount} />
 
-            {/* Credit toggle — only if client selected */}
+
+            {/* Electronic Invoice toggle — only if client selected */}
             {selectedClientId && (
               <div className="space-y-2">
-                <button
-                  onClick={() => setIsCredit(c => !c)}
-                  className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl border text-sm font-bold transition-all ${
-                    isCredit
-                      ? 'bg-premium-emerald/10 border-premium-emerald/30 text-premium-emerald'
-                      : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500'
-                  }`}
-                >
-                  <span className="flex items-center gap-2"><Wallet size={14} /> Venta a Crédito</span>
-                  <div className={`w-10 h-5 rounded-full relative transition-colors ${isCredit ? 'bg-premium-emerald' : 'bg-slate-300 dark:bg-slate-600'}`}>
-                    <motion.div animate={{ x: isCredit ? 20 : 2 }} className="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow" />
-                  </div>
-                </button>
-
                 <button
                   onClick={() => setGenerateElectronicInvoice(v => !v)}
                   className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl border text-sm font-bold transition-all ${
@@ -808,23 +791,28 @@ export default function POSTerminal() {
                     >← Volver</button>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <button
-                      onClick={() => handleCheckout('CASH')}
-                      className="flex items-center justify-center gap-2 bg-slate-900 dark:bg-white text-white dark:text-slate-950 font-black rounded-2xl py-4 hover:scale-[1.02] active:scale-[0.98] transition-all text-sm"
-                    ><Banknote size={16} /> Efectivo</button>
-                    <button
-                      onClick={() => handleCheckout('CARD')}
-                      className="flex items-center justify-center gap-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-black rounded-2xl py-4 border border-slate-200 dark:border-slate-700 hover:scale-[1.02] active:scale-[0.98] transition-all text-sm"
-                    ><CreditCard size={16} /> Tarjeta</button>
-                    <button
-                      onClick={() => handleCheckout('SINPE_MOVIL')}
-                      className="flex items-center justify-center gap-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-black rounded-2xl py-4 border border-slate-200 dark:border-slate-700 hover:scale-[1.02] active:scale-[0.98] transition-all text-sm"
-                    ><Smartphone size={16} /> SINPE</button>
-                    <button
-                      onClick={() => handleCheckout('CREDIT')}
-                      disabled={!selectedClientId}
-                      className="flex items-center justify-center gap-2 btn-premium-emerald py-4 disabled:opacity-30 hover:scale-[1.02] active:scale-[0.98] transition-all text-sm"
-                    ><Wallet size={16} /> Crédito</button>
+                    {(enabledMethods.length > 0 ? enabledMethods : ['CASH', 'CARD', 'SINPE_MOVIL', 'TRANSFER', 'CREDIT']).map(m => {
+                        const meta = getPaymentMethodMeta(m);
+                        if (!meta) return null;
+                        
+                        const isDisabled = m === 'CREDIT' && !selectedClientId;
+                        
+                        return (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() => handleCheckout(m as any)}
+                            disabled={isDisabled}
+                            className={`flex items-center justify-center gap-2 font-black rounded-2xl py-4 transition-all text-sm group ${
+                              isDisabled ? 'opacity-30 cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-400' :
+                              (m === 'CASH' ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-950 hover:scale-[1.02] active:scale-[0.98]' : 
+                               'bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 hover:scale-[1.02] active:scale-[0.98]')
+                            }`}
+                          >
+                            <meta.Icon size={16} /> {meta.label}
+                          </button>
+                        );
+                    })}
                   </div>
                 </motion.div>
               )}

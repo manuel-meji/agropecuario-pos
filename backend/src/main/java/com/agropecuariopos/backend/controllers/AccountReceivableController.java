@@ -143,7 +143,8 @@ public class AccountReceivableController {
                                                 p.getAmount(),
                                                 p.getPaymentDate(),
                                                 p.getPreviousBalance(),
-                                                p.getNewBalance()))
+                                                p.getNewBalance(),
+                                                p.getPaymentMethod()))
                                 .collect(Collectors.toList());
         }
 
@@ -178,6 +179,7 @@ public class AccountReceivableController {
                 record.setPaymentDate(java.time.LocalDateTime.now());
                 record.setPreviousBalance(previousBalance);
                 record.setNewBalance(saved.getRemainingBalance());
+                record.setPaymentMethod(request.getPaymentMethod());
                 paymentRecordRepository.save(record);
 
                 return new AccountReceivableResponse(
@@ -238,6 +240,7 @@ public class AccountReceivableController {
                                 record.setPaymentDate(java.time.LocalDateTime.now());
                                 record.setPreviousBalance(previousBalance);
                                 record.setNewBalance(saved.getRemainingBalance());
+                                record.setPaymentMethod(request.getPaymentMethod());
                                 paymentRecordRepository.save(record);
 
                                 remainingPayment = remainingPayment.subtract(amountToApply);

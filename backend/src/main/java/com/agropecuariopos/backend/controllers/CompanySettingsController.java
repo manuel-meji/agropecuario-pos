@@ -41,6 +41,7 @@ public class CompanySettingsController {
         current.setPrinterName(newSettings.getPrinterName());
         current.setCashierName(newSettings.getCashierName());
         current.setTaxExempt(newSettings.isTaxExempt());
+        current.setEnabledPaymentMethods(newSettings.getEnabledPaymentMethods());
         
         // Hacienda info
         current.setHaciendaUsername(newSettings.getHaciendaUsername());

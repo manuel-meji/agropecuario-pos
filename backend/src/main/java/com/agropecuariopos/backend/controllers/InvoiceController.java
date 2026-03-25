@@ -138,6 +138,28 @@ public class InvoiceController {
     }
 
     /**
+     * Consulta el estado de los últimos comprobantes emitidos.
+     * GET /api/invoices/recent
+     */
+    @GetMapping("/recent")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('CASHIER')")
+    public ResponseEntity<?> getRecentInvoices() {
+        return ResponseEntity.ok(
+                invoiceRepository.findAllOrderByCreatedAtDesc().stream()
+                        .limit(10) // Mostrar últimos 10
+                        .map(invoice -> Map.of(
+                                "id", invoice.getId(),
+                                "clave", invoice.getClave() != null ? invoice.getClave() : "N/A",
+                                "tipo", invoice.getTipoComprobante() != null ? invoice.getTipoComprobante().toString() : "N/A",
+                                "estado", invoice.getEstado() != null ? invoice.getEstado().toString() : "N/A",
+                                "fechaActualizacion", invoice.getFechaRespuesta() != null ? invoice.getFechaRespuesta().toString() : (invoice.getCreatedAt() != null ? invoice.getCreatedAt().toString() : "N/A"),
+                                "mensaje", invoice.getMensajeRespuesta() != null ? invoice.getMensajeRespuesta() : ""
+                        ))
+                        .collect(java.util.stream.Collectors.toList())
+        );
+    }
+
+    /**
      * Emite una Nota de Crédito para anular una factura/tiquete de una venta.
      * POST /api/invoices/sale/{saleId}/credit-note
      */

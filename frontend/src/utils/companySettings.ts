@@ -27,6 +27,7 @@ export interface CompanySettings {
   distrito?: string;
   barrio?: string;
   hasCertificate?: boolean;
+  enabledPaymentMethods?: string[];
 }
 
 export const DEFAULTS: CompanySettings = {
@@ -46,7 +47,8 @@ export const DEFAULTS: CompanySettings = {
   canton: '01',
   distrito: '01',
   barrio: '01',
-  haciendaActividadEconomica: '512102'
+  haciendaActividadEconomica: '512102',
+  enabledPaymentMethods: ['CASH', 'SINPE_MOVIL', 'CARD', 'TRANSFER', 'CREDIT']
 };
 
 /** Lee la configuración de empresa desde el Backend. */

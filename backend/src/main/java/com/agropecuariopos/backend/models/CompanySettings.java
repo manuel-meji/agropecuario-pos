@@ -7,6 +7,9 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import java.util.HashSet;
+import java.util.Arrays;
+import java.util.Set;
 
 @Entity
 @Table(name = "company_settings")
@@ -18,6 +21,12 @@ public class CompanySettings {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    // Payment Methods Configuration
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "company_payment_methods", joinColumns = @JoinColumn(name = "settings_id"))
+    @Column(name = "method_name")
+    private Set<String> enabledPaymentMethods = new HashSet<>(Arrays.asList("CASH", "CARD", "SINPE_MOVIL", "TRANSFER", "CREDIT"));
 
     // Basic Info
     @Column(nullable = false)
@@ -50,6 +59,13 @@ public class CompanySettings {
     
     @Column(length = 50)
     private String haciendaClientId = "api-stag";
+
+    public String getHaciendaClientId() {
+        if (haciendaClientId != null && !haciendaClientId.isBlank() && !haciendaClientId.equals("api-stag") && !haciendaClientId.equals("api-prod")) {
+            return haciendaClientId;
+        }
+        return "prod".equals(haciendaAmbiente) ? "api-prod" : "api-stag";
+    }
     
     private String haciendaTokenUrl;
     private String haciendaRecepcionUrl;
@@ -59,7 +75,11 @@ public class CompanySettings {
     }
 
     public String getHaciendaTokenUrl() {
-        if (haciendaTokenUrl != null && !haciendaTokenUrl.isBlank()) return haciendaTokenUrl;
+        if (haciendaTokenUrl != null && !haciendaTokenUrl.isBlank() && 
+            !haciendaTokenUrl.contains("rut-stag") && 
+            !haciendaTokenUrl.contains("realms/rut/")) {
+            return haciendaTokenUrl;
+        }
         return "prod".equals(haciendaAmbiente) 
             ? "https://idp.comprobanteselectronicos.go.cr/auth/realms/rut/protocol/openid-connect/token"
             : "https://idp.comprobanteselectronicos.go.cr/auth/realms/rut-stag/protocol/openid-connect/token";
@@ -70,16 +90,20 @@ public class CompanySettings {
     }
 
     public String getHaciendaRecepcionUrl() {
-        String base = (haciendaRecepcionUrl != null && !haciendaRecepcionUrl.isBlank()) 
-            ? haciendaRecepcionUrl 
-            : ("prod".equals(haciendaAmbiente)
-                ? "https://api-prod.comprobanteselectronicos.go.cr/recepcion/v1"
-                : "https://api-sandbox.comprobanteselectronicos.go.cr/recepcion/v1");
-        
-        if (base != null && !base.endsWith("/recepcion")) {
-            base = base.endsWith("/") ? base + "recepcion" : base + "/recepcion";
+        if (haciendaRecepcionUrl != null && !haciendaRecepcionUrl.isBlank() &&
+            !haciendaRecepcionUrl.contains("api-sandbox") &&
+            !haciendaRecepcionUrl.contains("api.comprobanteselectronicos")) {
+            
+            String base = haciendaRecepcionUrl;
+            if (base != null && !base.endsWith("/recepcion")) {
+                base = base.endsWith("/") ? base + "recepcion" : base + "/recepcion";
+            }
+            return base;
         }
-        return base;
+        
+        return "prod".equals(haciendaAmbiente)
+                ? "https://api.comprobanteselectronicos.go.cr/recepcion/v1/recepcion"
+                : "https://api-sandbox.comprobanteselectronicos.go.cr/recepcion/v1/recepcion";
     }
 
     private String haciendaActividadEconomica;

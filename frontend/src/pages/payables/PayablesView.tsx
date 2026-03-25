@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Plus, Building2, X, ChevronDown, Phone, Mail, Hash, History, FileText, ShoppingCart, Trash2 } from 'lucide-react';
+import PaymentMethodSelector from '../../components/PaymentMethodSelector';
 import toast from 'react-hot-toast';
 import { getSuppliers, getPurchasesBySupplier, getPayables, getProducts, getCategories, createPurchase, createProduct, getPayableHistory, makePayablePayment, makeSupplierBulkPayment } from '../../services/api';
 import CabysSearch from '../../components/CabysSearch';
@@ -31,6 +32,7 @@ export default function PayablesView() {
   const [paymentId, setPaymentId] = useState<number | null>(null);
   const [bulkPaymentSupplierId, setBulkPaymentSupplierId] = useState<number | null>(null);
   const [maxPaymentAmount, setMaxPaymentAmount] = useState<number>(0);
+  const [paymentMethod, setPaymentMethod] = useState('CASH');
 
   const loadData = async () => {
     try {
@@ -72,6 +74,7 @@ export default function PayablesView() {
     setPaymentId(payableId);
     setBulkPaymentSupplierId(null);
     setPaymentAmount('');
+    setPaymentMethod('CASH');
     setShowPaymentModal(true);
   };
 
@@ -80,6 +83,7 @@ export default function PayablesView() {
     setMaxPaymentAmount(maxAmount);
     setPaymentId(null);
     setPaymentAmount('');
+    setPaymentMethod('CASH');
     setShowPaymentModal(true);
   };
 
@@ -95,10 +99,10 @@ export default function PayablesView() {
           toast.error(`El monto no puede exceder el saldo pendiente de ₡${maxPaymentAmount.toLocaleString()}`);
           return;
         }
-        await makeSupplierBulkPayment(bulkPaymentSupplierId, parseFloat(paymentAmount));
+        await makeSupplierBulkPayment(bulkPaymentSupplierId, parseFloat(paymentAmount), paymentMethod);
         toast.success("Abono registrado correctamente");
       } else if (paymentId) {
-        await makePayablePayment(paymentId, parseFloat(paymentAmount));
+        await makePayablePayment(paymentId, parseFloat(paymentAmount), paymentMethod);
         toast.success("Abono registrado correctamente");
       } else {
         return;
@@ -313,6 +317,7 @@ export default function PayablesView() {
                     autoFocus
                   />
                 </div>
+                <PaymentMethodSelector value={paymentMethod} onChange={setPaymentMethod} />
                 <div className="flex gap-4">
                   <button onClick={() => setShowPaymentModal(false)} className="flex-1 py-4 text-slate-500 font-bold hover:bg-slate-50 dark:hover:bg-slate-800 rounded-2xl transition-colors">Cancelar</button>
                   <button onClick={handlePaymentSubmit} className="flex-1 btn-premium-emerald py-4">Confirmar</button>

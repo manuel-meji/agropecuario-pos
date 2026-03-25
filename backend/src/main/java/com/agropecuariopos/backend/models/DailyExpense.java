@@ -42,6 +42,11 @@ public class DailyExpense {
     // Deduction logic on Net Profit
     private Boolean isDeductibleFromProfit;
 
+    /** Medio de pago: CASH, CARD, SINPE_MOVIL, TRANSFER, CHECK, OTHER */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 30)
+    private PaymentRecord.PaymentMethod paymentMethod;
+
     @CreatedBy
     @Column(updatable = false)
     private String registeredBy;
@@ -54,3 +59,4 @@ public class DailyExpense {
         OPERATIONAL_UTILITIES, PAYROLL, LOGISTICS, MAINTENANCE, TAXES, MISCELLANEOUS, OTROS, SUPPLIER_PAYMENT
     }
 }
+

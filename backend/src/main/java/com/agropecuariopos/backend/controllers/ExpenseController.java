@@ -52,6 +52,7 @@ public class ExpenseController {
             e.setCategory(updated.getCategory());
             e.setAmount(updated.getAmount());
             e.setIsDeductibleFromProfit(updated.getIsDeductibleFromProfit());
+            e.setPaymentMethod(updated.getPaymentMethod());
             return ResponseEntity.ok(expenseRepository.save(e));
         }).orElse(ResponseEntity.notFound().build());
     }
