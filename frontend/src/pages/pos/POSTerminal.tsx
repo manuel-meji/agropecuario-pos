@@ -172,7 +172,7 @@ export default function POSTerminal() {
   const [showPaymentMethods, setShowPaymentMethods] = useState(false);
   const [enabledMethods, setEnabledMethods] = useState<string[]>([]);
   const [isCredit, setIsCredit] = useState(false);
-  const [generateElectronicInvoice, setGenerateElectronicInvoice] = useState(true);
+  const [generateElectronicInvoice, setGenerateElectronicInvoice] = useState(false);
   // Client creation inline
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [newClient, setNewClient] = useState({ name: '', identification: '', email: '', phone: '', address: '', isCreditEligible: false, maxCreditLevel: 0 });

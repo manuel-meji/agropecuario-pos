@@ -21,6 +21,23 @@ api.interceptors.request.use(
   }
 );
 
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      if (localStorage.getItem('user')) {
+         localStorage.removeItem('user');
+         if (window.location.pathname !== '/login') {
+            window.location.href = '/login';
+         }
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
+export const validateToken = () => api.get('/auth/validate').then(res => res.data);
+
 export const getProducts = () => api.get('/products').then(res => res.data);
 export const createProduct = (product: any) => api.post('/products', product).then(res => res.data);
 export const getCategories = () => api.get('/categories').then(res => res.data);
@@ -164,7 +181,12 @@ export const uploadCertificate = (file: File) => {
   }).then(res => res.data);
 };
 
+// --- Auth ---
+export const updateProfile = (profileData: any) => api.put('/auth/update-profile', profileData).then(res => res.data);
+
+// --- Admin - Users ---
+export const getUsers = () => api.get('/users').then(res => res.data);
+export const createUser = (user: any) => api.post('/users', user).then(res => res.data);
+export const deleteUser = (id: number) => api.delete(`/users/${id}`).then(res => res.data);
+
 export default api;
-
-
-

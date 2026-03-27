@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Building2, Save, X, Server, ShieldCheck, Cloud, HardDrive, Wallet, CheckCircle2 } from 'lucide-react';
+import { Building2, Save, X, Server, ShieldCheck, Cloud, HardDrive, Wallet, CheckCircle2, UserCircle, Users, Trash2, Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getCompanySettings, saveCompanySettings, uploadCertificate, CompanySettings } from '../../utils/companySettings';
-import { getConsecutive, updateConsecutive } from '../../services/api';
+import { getConsecutive, updateConsecutive, updateProfile, getUsers, createUser, deleteUser } from '../../services/api';
+import authService from '../../services/authService';
 
 export default function SettingsView() {
   const [activeTab, setActiveTab] = useState('general');
@@ -13,12 +14,30 @@ export default function SettingsView() {
   const [consecutiveDirty, setConsecutiveDirty] = useState(false);
   const [loading, setLoading] = useState(true);
   const [certFile, setCertFile] = useState<File | null>(null);
+  
+  // Profile update states
+  const [profileData, setProfileData] = useState({ currentPassword: '', newUsername: '', newPassword: '', newEmail: '' });
+  const currentUser = authService.getCurrentUser();
+  const isAdmin = currentUser?.roles?.includes('ROLE_ADMIN');
+
+  // Users management states
+  const [usersList, setUsersList] = useState<any[]>([]);
+  const [newUser, setNewUser] = useState({ username: '', name: '', email: '', password: '', role: ['user'] });
+  const [userLoading, setUserLoading] = useState(false);
 
   // Cargar al montar
   useEffect(() => {
     async function init() {
       const s = await getCompanySettings();
       setSettings(s);
+      
+      if (isAdmin) {
+         try {
+             const uList = await getUsers();
+             setUsersList(uList);
+         } catch(e) {}
+      }
+
       setLoading(false);
       
       try {
@@ -133,6 +152,20 @@ export default function SettingsView() {
             >
                <Server size={20} /> Backup & EOD
             </button>
+            <button 
+               onClick={() => setActiveTab('profile')}
+               className={`flex items-center gap-3 w-full p-3 rounded-lg transition-all text-left ${activeTab === 'profile' ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-semibold' : 'text-gray-600 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/5'}`}
+            >
+               <UserCircle size={20} /> Mi Perfil
+            </button>
+            {isAdmin && (
+               <button 
+                  onClick={() => setActiveTab('users')}
+                  className={`flex items-center gap-3 w-full p-3 rounded-lg transition-all text-left ${activeTab === 'users' ? 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 font-semibold' : 'text-gray-600 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/5'}`}
+               >
+                  <Users size={20} /> Usuarios (Admin)
+               </button>
+            )}
          </div>
 
          {/* Panel de Contenido */}
@@ -498,6 +531,194 @@ export default function SettingsView() {
                       </div>
                    </div>
                    <p className="text-slate-500 dark:text-slate-400 text-sm">Módulo en desarrollo. Disponible en próxima versión.</p>
+                </motion.div>
+             )}
+
+             {activeTab === 'profile' && (
+                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6 max-w-3xl">
+                   <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl p-4 flex gap-4">
+                      <div className="p-2 bg-indigo-100 dark:bg-indigo-900/50 rounded-lg text-indigo-600 dark:text-indigo-400 h-fit">
+                         <UserCircle size={24} />
+                      </div>
+                      <div>
+                         <h4 className="font-bold text-indigo-900 dark:text-indigo-300">Editar Perfil de Acceso</h4>
+                         <p className="text-sm text-indigo-700 dark:text-indigo-400/80 mt-1">Actualiza el usuario o contraseña de tu cuenta actual ({currentUser?.username}).</p>
+                      </div>
+                   </div>
+
+                   <div className="space-y-6">
+                      <div className="space-y-2">
+                         <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Contraseña Actual <span className="text-red-500">*</span></label>
+                         <p className="text-xs text-slate-500 mb-1">Necesaria para autorizar cualquier cambio.</p>
+                         <input 
+                           type="password" 
+                           className="liquid-input w-full" 
+                           value={profileData.currentPassword}
+                           onChange={e => setProfileData({...profileData, currentPassword: e.target.value})}
+                         />
+                      </div>
+
+                       <div className="space-y-2">
+                          <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Correo Electrónico Actualizado</label>
+                          <input 
+                            type="email" 
+                            className="liquid-input w-full" 
+                            placeholder={currentUser?.email || 'tu@correo.com'}
+                            value={profileData.newEmail}
+                            onChange={e => setProfileData({...profileData, newEmail: e.target.value})}
+                          />
+                       </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                           <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Nuevo Nombre de Usuario</label>
+                           <input 
+                             type="text" 
+                             className="liquid-input w-full" 
+                             placeholder={currentUser?.username}
+                             value={profileData.newUsername}
+                             onChange={e => setProfileData({...profileData, newUsername: e.target.value})}
+                           />
+                        </div>
+                        <div className="space-y-2">
+                           <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Nueva Contraseña</label>
+                           <input 
+                             type="password" 
+                             className="liquid-input w-full" 
+                             placeholder="Dejar en blanco para no cambiar"
+                             value={profileData.newPassword}
+                             onChange={e => setProfileData({...profileData, newPassword: e.target.value})}
+                           />
+                        </div>
+                      </div>
+
+                      <div className="pt-4 flex justify-end">
+                         <button 
+                           onClick={async () => {
+                              if (!profileData.currentPassword) {
+                                  toast.error("Debes ingresar tu contraseña actual.");
+                                  return;
+                              }
+                              const loadId = toast.loading('Actualizando perfil...');
+                              try {
+                                 const res = await updateProfile({
+                                     currentPassword: profileData.currentPassword,
+                                     newUsername: profileData.newUsername || undefined,
+                                     newPassword: profileData.newPassword || undefined,
+                                     newEmail: profileData.newEmail || undefined
+                                 });
+                                 toast.success(typeof res === 'string' ? res : 'Perfil actualizado con éxito.', { id: loadId });
+                                 setProfileData({ currentPassword: '', newUsername: '', newPassword: '', newEmail: '' });
+                                 setTimeout(() => { authService.logout(); window.location.href = '/login'; }, 2000);
+                              } catch(e: any) {
+                                 toast.error(e.response?.data || 'Error al actualizar', { id: loadId });
+                              }
+                           }}
+                           className="liquid-btn-primary px-6 py-2 shadow-sm text-sm flex items-center gap-2 font-semibold transition-transform hover:scale-[1.02]"
+                         >
+                           <Save size={18} /> Actualizar Credenciales
+                         </button>
+                      </div>
+                   </div>
+                </motion.div>
+             )}
+
+             {activeTab === 'users' && isAdmin && (
+                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-8 max-w-4xl">
+                   <div className="bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-800 rounded-xl p-4 flex gap-4">
+                      <div className="p-2 bg-cyan-100 dark:bg-cyan-900/50 rounded-lg text-cyan-600 dark:text-cyan-400 h-fit">
+                         <Users size={24} />
+                      </div>
+                      <div>
+                         <h4 className="font-bold text-cyan-900 dark:text-cyan-300">Gestión de Usuarios del Sistema</h4>
+                         <p className="text-sm text-cyan-700 dark:text-cyan-400/80 mt-1">Crea nuevas cuentas de acceso y gestiona los trabajadores del sistema. Los correos deben ser reales para que los trabajadores puedan recuperar su contraseña si la olvidan.</p>
+                      </div>
+                   </div>
+
+                   <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-6">
+                      <h3 className="font-bold text-lg mb-4 text-slate-800 dark:text-white">Añadir Nuevo Empleado</h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                         <input type="text" className="liquid-input text-sm" placeholder="Nombre de Usuario (ej. cajero1)" value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} />
+                         <input type="email" className="liquid-input text-sm" placeholder="Correo (MUUY IMPORTANTE)" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} />
+                         <input type="password" className="liquid-input text-sm" placeholder="Contraseña Temporal" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} />
+                         <select className="liquid-input text-sm" value={newUser.role[0]} onChange={e => setNewUser({...newUser, role: [e.target.value]})}>
+                             <option value="user">Cajero (ROLE_USER)</option>
+                             <option value="admin">Administrador (ROLE_ADMIN)</option>
+                         </select>
+                      </div>
+                      <div className="mt-4 flex justify-end">
+                         <button 
+                           onClick={async () => {
+                               if (!newUser.username || !newUser.password || !newUser.email) return toast.error('Llene todos los campos');
+                               setUserLoading(true);
+                               const loadingToast = toast.loading('Creando cuenta...');
+                               try {
+                                   await createUser(newUser);
+                                   toast.success('Cuenta creada exitosamente', { id: loadingToast });
+                                   setUsersList(await getUsers());
+                                   setNewUser({ username: '', name: '', email: '', password: '', role: ['user'] });
+                               } catch(e:any) {
+                                   toast.error(e.response?.data || 'Error al crear', { id: loadingToast });
+                               } finally {
+                                   setUserLoading(false);
+                               }
+                           }}
+                           disabled={userLoading}
+                           className="bg-cyan-600 hover:bg-cyan-700 text-white px-5 py-2 rounded-lg font-bold flex items-center gap-2 text-sm transition-colors disabled:opacity-50"
+                         >
+                           <Plus size={16} /> Crear Cuenta
+                         </button>
+                      </div>
+                   </div>
+
+                   <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+                      <table className="w-full text-left text-sm">
+                         <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 text-slate-500 font-semibold">
+                            <tr>
+                               <th className="p-4">Usuario</th>
+                               <th className="p-4">Correo Electrónico</th>
+                               <th className="p-4">Rol en Sistema</th>
+                               <th className="p-4 text-right">Acciones</th>
+                            </tr>
+                         </thead>
+                         <tbody>
+                            {usersList.map(u => (
+                               <tr key={u.id} className="border-b border-slate-100 dark:border-slate-800/50 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                                  <td className="p-4 font-bold text-slate-800 dark:text-slate-200">{u.username}</td>
+                                  <td className="p-4 text-slate-500">{u.email}</td>
+                                  <td className="p-4">
+                                     <span className={`px-2 py-1 text-[10px] font-black uppercase tracking-wider rounded-md ${u.roles?.some((r:any) => r.name === 'ROLE_ADMIN') ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}`}>
+                                        {u.roles?.some((r:any) => r.name === 'ROLE_ADMIN') ? 'Administrador' : 'Cajero'}
+                                     </span>
+                                  </td>
+                                  <td className="p-4 text-right">
+                                     <button 
+                                        disabled={u.username === currentUser?.username}
+                                        onClick={async () => {
+                                            if(!window.confirm(`¿Seguro que deseas eliminar a ${u.username}?`)) return;
+                                            const tl = toast.loading('Eliminando...');
+                                            try {
+                                                await deleteUser(u.id);
+                                                setUsersList(usersList.filter(x => x.id !== u.id));
+                                                toast.success('Eliminado correctamente', { id: tl });
+                                            } catch(e) {
+                                                toast.error('Error al eliminar', { id: tl });
+                                            }
+                                        }}
+                                        className="text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 p-2 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                        title={u.username === currentUser?.username ? 'No puedes eliminarte a ti mismo' : 'Eliminar Cuenta'}
+                                     >
+                                        <Trash2 size={16} />
+                                     </button>
+                                  </td>
+                               </tr>
+                            ))}
+                            {usersList.length === 0 && (
+                               <tr><td colSpan={4} className="p-6 text-center text-slate-500 font-medium">No hay usuarios registrados o cargando...</td></tr>
+                            )}
+                         </tbody>
+                      </table>
+                   </div>
                 </motion.div>
              )}
 

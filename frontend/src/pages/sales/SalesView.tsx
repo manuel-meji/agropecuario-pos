@@ -115,13 +115,21 @@ export default function SalesView() {
 
     setIsIssuingNC(true);
     try {
-      await issueCreditNote(saleForCreditNote.id, creditNoteReason);
-      toast.success('Nota de Crédito emitida correctamente.');
+      const result = await issueCreditNote(saleForCreditNote.id, creditNoteReason);
+      
+      if (result && result.estado === 'RECHAZADO') {
+         toast.error(`Rechazado por Hacienda: ${result.mensaje || 'Error desconocido'}`);
+      } else if (result && result.estado === 'ERROR_ENVIO') {
+         toast.error(`Error 403 Forbidden desde Hacienda API: Sus credenciales/ambiente de Hacienda están mal configurados o la API del Ministerio le bloqueó el acceso.`);
+      } else {
+         toast.success('✅ ¡Nota de Crédito enviada a Hacienda correctamente!');
+      }
+
       setIsCreditNoteModalOpen(false);
       setSaleForCreditNote(null);
-      loadSales(); // Recargar para ver el estado (aunque el estado de la venta no cambie, el historial sí)
+      await loadSales(); // Esperamos a que recargue
     } catch (error: any) {
-      const msg = error.response?.data?.message || error.response?.data || 'Error al emitir la Nota de Crédito.';
+      const msg = error.response?.data?.message || error.response?.data || 'Error al emitir la Nota de Crédito. Se agotó el tiempo de espera.';
       toast.error(typeof msg === 'string' ? msg : 'Error al emitir la Nota de Crédito.');
     } finally {
       setIsIssuingNC(false);
