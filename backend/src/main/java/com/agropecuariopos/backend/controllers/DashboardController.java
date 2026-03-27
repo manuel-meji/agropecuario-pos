@@ -99,7 +99,7 @@ public class DashboardController {
             if (dayExp == null) dayExp = BigDecimal.ZERO;
 
             String label = days <= 7
-                    ? day.getDayOfWeek().getDisplayName(TextStyle.SHORT, new Locale("es", "CR"))
+                    ? day.getDayOfWeek().getDisplayName(TextStyle.SHORT, Locale.forLanguageTag("es-CR"))
                     : String.valueOf(day.getDayOfMonth()) + "/" + day.getMonthValue();
 
             Map<String, Object> point = new LinkedHashMap<>();

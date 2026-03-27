@@ -3,7 +3,7 @@ package com.agropecuariopos.backend.services.hacienda;
 import com.agropecuariopos.backend.models.ReceivedDocument;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -28,14 +28,8 @@ public class MensajeReceptorGeneratorService {
     private static final DateTimeFormatter HACIENDA_ISO = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX");
     private static final String NAMESPACE = "https://cdn.comprobanteselectronicos.go.cr/xml-schemas/v4.4/mensajeReceptor";
 
-    @Value("${hacienda.emisor.cedula}")
-    private String receptorCedula;
-
-    @Value("${hacienda.emisor.tipo.cedula}")
-    private String receptorTipoCedula;
-
-    @Value("${hacienda.emisor.actividad.economica}")
-    private String actividadEconomica;
+    @Autowired
+    private com.agropecuariopos.backend.repositories.CompanySettingsRepository settingsRepository;
 
     /**
      * Aceptar Total (Mensaje = 1).
@@ -96,8 +90,11 @@ public class MensajeReceptorGeneratorService {
         // Clave del comprobante recibido (50 dígitos)
         xml.append("  <Clave>").append(doc.getClave()).append("</Clave>\n");
 
+        com.agropecuariopos.backend.models.CompanySettings settings = settingsRepository.findFirst()
+                .orElseThrow(() -> new RuntimeException("Configuración no encontrada para generar MensajeReceptor."));
+
         // Cédula del receptor (quien emite el mensaje = nosotros)
-        xml.append("  <NumeroCedulaReceptor>").append(receptorCedula).append("</NumeroCedulaReceptor>\n");
+        xml.append("  <NumeroCedulaReceptor>").append(settings.getLegalId()).append("</NumeroCedulaReceptor>\n");
 
         // Cédula del emisor del comprobante original (el proveedor)
         xml.append("  <NumeroCedulaEmisor>").append(doc.getCedulaEmisor()).append("</NumeroCedulaEmisor>\n");

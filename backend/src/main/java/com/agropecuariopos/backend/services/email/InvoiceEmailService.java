@@ -1,6 +1,5 @@
 package com.agropecuariopos.backend.services.email;
 
-import com.agropecuariopos.backend.models.Client;
 import com.agropecuariopos.backend.models.ElectronicInvoice;
 import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
@@ -45,12 +44,14 @@ public class InvoiceEmailService {
 
             // Adjuntar XML Firmado
             if (invoice.getXmlFirmadoBase64() != null && !invoice.getXmlFirmadoBase64().isBlank()) {
+                @SuppressWarnings("null")
                 byte[] xmlFirmadoBytes = invoice.getXmlFirmadoBase64().getBytes("UTF-8");
                 helper.addAttachment("Factura_" + invoice.getNumeroConsecutivo() + ".xml", new ByteArrayResource(xmlFirmadoBytes));
             }
 
             // Adjuntar Respuesta de Hacienda
             if (invoice.getXmlRespuestaHacienda() != null && !invoice.getXmlRespuestaHacienda().isBlank()) {
+                @SuppressWarnings("null")
                 byte[] xmlRespuestaBytes;
                 try {
                     xmlRespuestaBytes = Base64.getDecoder().decode(invoice.getXmlRespuestaHacienda());

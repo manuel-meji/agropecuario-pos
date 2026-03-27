@@ -36,12 +36,12 @@ const fmtK = (val: number) =>
   val >= 1_000 ? `₡${(val / 1_000).toFixed(0)}k` : `₡${val}`;
 
 const PM_LABELS: Record<string, { label: string; icon: React.ElementType; color: string; bg: string }> = {
-  CASH:       { label: 'Efectivo',    icon: BanknoteIcon, color: 'text-green-600',  bg: 'bg-green-50 dark:bg-green-900/20' },
-  CARD:       { label: 'Tarjeta',     icon: CreditCard,   color: 'text-blue-600',   bg: 'bg-blue-50 dark:bg-blue-900/20' },
-  SINPE_MOVIL:{ label: 'SINPE Móvil', icon: Smartphone,   color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20' },
-  SIMPE_MOVIL:{ label: 'SINPE Móvil', icon: Smartphone,   color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20' },
-  CREDIT:     { label: 'Crédito',     icon: Wallet,       color: 'text-amber-600',  bg: 'bg-amber-50 dark:bg-amber-900/20' },
-  TRANSFER:   { label: 'Transferencia', icon: ArrowUpRight, color: 'text-teal-600', bg: 'bg-teal-50 dark:bg-teal-900/20' },
+  CASH:        { label: 'Efectivo',       icon: BanknoteIcon, color: 'text-green-600',  bg: 'bg-green-50 dark:bg-green-900/20'   },
+  CARD:        { label: 'Tarjeta',        icon: CreditCard,   color: 'text-blue-600',   bg: 'bg-blue-50 dark:bg-blue-900/20'     },
+  SINPE_MOVIL: { label: 'SINPE Móvil',   icon: Smartphone,   color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20' },
+  SIMPE_MOVIL: { label: 'SINPE Móvil',   icon: Smartphone,   color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20' },
+  TRANSFER:    { label: 'Transferencia', icon: ArrowUpRight,  color: 'text-teal-600',   bg: 'bg-teal-50 dark:bg-teal-900/20'    },
+  CREDIT:      { label: 'Crédito',       icon: Wallet,        color: 'text-amber-600',  bg: 'bg-amber-50 dark:bg-amber-900/20'   },
 };
 
 const PIE_COLORS = ['#10b981', '#3b82f6', '#a855f7', '#f59e0b', '#14b8a6'];

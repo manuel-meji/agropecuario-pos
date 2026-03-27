@@ -1,77 +1,98 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Building2, Save, X, Server, ShieldCheck, Cloud, HardDrive } from 'lucide-react';
+import { Building2, Save, X, Server, ShieldCheck, Cloud, HardDrive, Wallet, CheckCircle2, UserCircle, Users, Trash2, Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
-
-const SETTINGS_KEY = 'agropecuario_company_settings';
-
-const DEFAULT_SETTINGS = {
-  businessName: '',
-  legalId: '',
-  phone: '',
-  email: '',
-  address: '',
-  province: 'San José',
-  currency: 'CRC',
-  printMode: 'browser',
-  printerName: '',
-  cashierName: '',
-  taxExempt: false,
-};
-
-function loadSettings() {
-  try {
-    const raw = localStorage.getItem(SETTINGS_KEY);
-    if (raw) return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
-  } catch {}
-  return DEFAULT_SETTINGS;
-}
-
-import { getConsecutive, updateConsecutive } from '../../services/api';
+import { getCompanySettings, saveCompanySettings, uploadCertificate, CompanySettings } from '../../utils/companySettings';
+import { getConsecutive, updateConsecutive, updateProfile, getUsers, createUser, deleteUser } from '../../services/api';
+import authService from '../../services/authService';
 
 export default function SettingsView() {
   const [activeTab, setActiveTab] = useState('general');
-  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<CompanySettings | null>(null);
   const [dirty, setDirty] = useState(false);
   const [consecutive, setConsecutive] = useState<number | null>(null);
   const [consecutiveDirty, setConsecutiveDirty] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [certFile, setCertFile] = useState<File | null>(null);
+  
+  // Profile update states
+  const [profileData, setProfileData] = useState({ currentPassword: '', newUsername: '', newPassword: '', newEmail: '' });
+  const currentUser = authService.getCurrentUser();
+  const isAdmin = currentUser?.roles?.includes('ROLE_ADMIN');
+
+  // Users management states
+  const [usersList, setUsersList] = useState<any[]>([]);
+  const [newUser, setNewUser] = useState({ username: '', name: '', email: '', password: '', role: ['user'] });
+  const [userLoading, setUserLoading] = useState(false);
 
   // Cargar al montar
   useEffect(() => {
-    setSettings(loadSettings());
-    getConsecutive('01')
-      .then(res => setConsecutive(res.ultimoConsecutivo))
-      .catch(() => setConsecutive(0));
+    async function init() {
+      const s = await getCompanySettings();
+      setSettings(s);
+      
+      if (isAdmin) {
+         try {
+             const uList = await getUsers();
+             setUsersList(uList);
+         } catch(e) {}
+      }
+
+      setLoading(false);
+      
+      try {
+        const res = await getConsecutive('01');
+        setConsecutive(res.ultimoConsecutivo);
+      } catch {
+        setConsecutive(0);
+      }
+    }
+    init();
   }, []);
 
-  const handleChange = (field: string, value: string) => {
-    setSettings(prev => ({ ...prev, [field]: value }));
+  const handleChange = (field: keyof CompanySettings, value: any) => {
+    if (!settings) return;
+    setSettings(prev => prev ? ({ ...prev, [field]: value }) : null);
     setDirty(true);
   };
 
   const handleSave = async () => {
+    if (!settings) return;
+    const loadId = toast.loading('Guardando configuración...');
     try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      await saveCompanySettings(settings);
+      
+      if (certFile) {
+        await uploadCertificate(certFile);
+        setCertFile(null);
+      }
+
       setDirty(false);
       
-      // Save consecutive if modified
       if (consecutiveDirty && consecutive !== null) {
         await updateConsecutive('01', consecutive);
         await updateConsecutive('04', consecutive);
         setConsecutiveDirty(false);
       }
       
-      toast.success('¡Configuración guardada correctamente!');
-    } catch {
-      toast.error('Error al guardar la configuración.');
+      toast.success('¡Configuración guardada correctamente!', { id: loadId });
+    } catch (error) {
+      toast.error('Error al guardar la configuración.', { id: loadId });
     }
   };
 
-  const handleCancel = () => {
-    setSettings(loadSettings());
+  const handleCancel = async () => {
+    setLoading(true);
+    const s = await getCompanySettings();
+    setSettings(s);
     setDirty(false);
+    setLoading(false);
     toast('Cambios descartados.', { icon: '↩️' });
   };
+
+  if (loading || !settings) {
+    return <div className="flex h-full items-center justify-center">Cargando... de base de datos...</div>;
+  }
 
   return (
     <div className="flex flex-col gap-6 w-full max-w-7xl mx-auto h-[calc(100vh-8rem)]">
@@ -120,15 +141,82 @@ export default function SettingsView() {
                <HardDrive size={20} /> Hardware & Tiqueteras
             </button>
             <button 
+               onClick={() => setActiveTab('payments')}
+               className={`flex items-center gap-3 w-full p-3 rounded-lg transition-all text-left ${activeTab === 'payments' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 font-semibold' : 'text-gray-600 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/5'}`}
+            >
+               <Wallet size={20} /> Billeteras & Pagos
+            </button>
+            <button 
                onClick={() => setActiveTab('advanced')}
                className={`flex items-center gap-3 w-full p-3 rounded-lg transition-all text-left ${activeTab === 'advanced' ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 font-semibold' : 'text-gray-600 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/5'}`}
             >
                <Server size={20} /> Backup & EOD
             </button>
+            <button 
+               onClick={() => setActiveTab('profile')}
+               className={`flex items-center gap-3 w-full p-3 rounded-lg transition-all text-left ${activeTab === 'profile' ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-semibold' : 'text-gray-600 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/5'}`}
+            >
+               <UserCircle size={20} /> Mi Perfil
+            </button>
+            {isAdmin && (
+               <button 
+                  onClick={() => setActiveTab('users')}
+                  className={`flex items-center gap-3 w-full p-3 rounded-lg transition-all text-left ${activeTab === 'users' ? 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 font-semibold' : 'text-gray-600 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/5'}`}
+               >
+                  <Users size={20} /> Usuarios (Admin)
+               </button>
+            )}
          </div>
 
          {/* Panel de Contenido */}
-         <div className="flex-1 liquid-glass-panel p-6 overflow-y-auto custom-scrollbar relative">
+         <div className="flex-1 liquid-glass-panel p-6 overflow-y-auto custom-scrollbar relative">              {activeTab === 'payments' && (
+                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-8 max-w-3xl">
+                   <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 flex gap-4">
+                      <div className="p-2 bg-amber-100 dark:bg-amber-900/50 rounded-lg text-amber-600 dark:text-amber-400 h-fit">
+                         <Wallet size={24} />
+                      </div>
+                      <div>
+                         <h4 className="font-bold text-amber-900 dark:text-amber-300">Configuración de Billeteras</h4>
+                         <p className="text-sm text-amber-700 dark:text-amber-400/80 mt-1">Activa o desactiva los medios de pago disponibles en el sistema. Los métodos desactivados no aparecerán en el POS ni en cierres de caja.</p>
+                      </div>
+                   </div>
+
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {[
+                        { id: 'CASH', label: 'Efectivo', desc: 'Cobros físicos en billetes y monedas' },
+                        { id: 'SINPE_MOVIL', label: 'SINPE Móvil', desc: 'Transferencias rápidas vía número telefónico' },
+                        { id: 'CARD', label: 'Tarjeta', desc: 'Cobros vía Datáfono (Visa/Mastercard)' },
+                        { id: 'TRANSFER', label: 'Transferencia', desc: 'Depósitos bancarios directos' },
+                        { id: 'CREDIT', label: 'Venta a Crédito', desc: 'Permitir que ciertos clientes compren a crédito' }
+                      ].map(method => {
+                        const isEnabled = settings.enabledPaymentMethods?.includes(method.id);
+                        return (
+                          <div 
+                            key={method.id}
+                            onClick={() => {
+                              const current = settings.enabledPaymentMethods || [];
+                              const next = isEnabled 
+                                ? current.filter(m => m !== method.id)
+                                : [...current, method.id];
+                              handleChange('enabledPaymentMethods', next);
+                            }}
+                            className={`group cursor-pointer p-4 rounded-2xl border-2 transition-all flex items-start gap-4 ${isEnabled ? 'bg-amber-500/5 border-amber-500/30' : 'bg-slate-50 dark:bg-slate-900/50 border-transparent opacity-60 hover:opacity-100 hover:border-slate-200 dark:hover:border-slate-800'}`}
+                          >
+                            <div className={`mt-1 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${isEnabled ? 'bg-amber-500 border-amber-500' : 'border-slate-300 dark:border-slate-600'}`}>
+                              {isEnabled && <CheckCircle2 size={12} className="text-white" />}
+                            </div>
+                            <div className="flex-1">
+                               <p className={`font-black uppercase tracking-widest text-xs ${isEnabled ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500'}`}>{method.label}</p>
+                               <p className="text-[11px] text-slate-400 font-medium mt-0.5 leading-relaxed">{method.desc}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                   </div>
+                </motion.div>
+              )}
+
+
              
              {activeTab === 'hacienda' && (
                 <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-8 max-w-3xl">
@@ -137,30 +225,45 @@ export default function SettingsView() {
                          <ShieldCheck size={24} />
                       </div>
                       <div>
-                         <h4 className="font-bold text-blue-900 dark:text-blue-300">Conexión Segura OIDC Activa</h4>
-                         <p className="text-sm text-blue-700 dark:text-blue-400/80 mt-1">El servidor está tramitando y firmando tokens Bearer correctamente con el Entorno Staging (Pruebas) de ATV v4.4.</p>
+                         <h4 className="font-bold text-blue-900 dark:text-blue-300">Conexión Segura Tributación</h4>
+                         <p className="text-sm text-blue-700 dark:text-blue-400/80 mt-1">Configura las credenciales de ATV. Los datos se almacenan de forma encriptada en el servidor (AES-256).</p>
                       </div>
                    </div>
 
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2">
-                         <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Usuario API (ATV)</label>
-                         <input type="text" className="liquid-input w-full" defaultValue="cpf-02-0453-xxxx-x" />
+                         <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Usuario API (Hacienda)</label>
+                         <input 
+                           type="text" 
+                           className="liquid-input w-full" 
+                           value={settings.haciendaUsername || ''} 
+                           onChange={e => handleChange('haciendaUsername', e.target.value)}
+                         />
                       </div>
                       <div className="space-y-2">
-                         <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Entorno de Emisión</label>
-                         <select className="liquid-input w-full cursor-pointer appearance-none">
-                            <option value="test">Sandbox (Pruebas)</option>
-                            <option value="prod">Producción (ATV)</option>
+                         <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Ambiente</label>
+                         <select 
+                           className="liquid-input w-full cursor-pointer appearance-none"
+                           value={settings.haciendaAmbiente}
+                           onChange={e => handleChange('haciendaAmbiente', e.target.value as any)}
+                         >
+                            <option value="stag">Sandbox (Pruebas)</option>
+                            <option value="prod">Producción (Real)</option>
                          </select>
                       </div>
                       <div className="space-y-2 md:col-span-2">
                          <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Contraseña API</label>
-                         <input type="password" className="liquid-input w-full" defaultValue="**********" />
+                         <input 
+                           type="password" 
+                           className="liquid-input w-full" 
+                           placeholder="Dejar en blanco para no cambiar"
+                           value={settings.haciendaPassword || ''}
+                           onChange={e => handleChange('haciendaPassword', e.target.value)}
+                         />
                       </div>
-                      <div className="space-y-2 md:col-span-2 pb-4">
+                      <div className="space-y-2 md:col-span-2">
                          <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Último Consecutivo Utilizado</label>
-                         <p className="text-xs text-slate-500 mb-2">Define o ajusta el número consecutivo donde quieres empezar a facturar. (El sistema incrementará 1 a partir de este número). Aplica para Tiquetes (04) y Facturas (01).</p>
+                         <p className="text-xs text-slate-500 mb-2">Define o ajusta el número consecutivo donde quieres empezar a facturar.</p>
                          <input 
                            type="number" 
                            min="0"
@@ -172,6 +275,16 @@ export default function SettingsView() {
                            }}
                          />
                       </div>
+                      <div className="space-y-2 md:col-span-2">
+                         <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Código Actividad Económica (Hacienda)</label>
+                         <input 
+                           type="text" 
+                           className="liquid-input w-full" 
+                           placeholder="Ej: 512102"
+                           value={settings.haciendaActividadEconomica || ''}
+                           onChange={e => handleChange('haciendaActividadEconomica', e.target.value)}
+                         />
+                      </div>
                    </div>
 
                    <hr className="border-gray-200 dark:border-gray-800" />
@@ -180,12 +293,35 @@ export default function SettingsView() {
                       <h4 className="font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
                          <ShieldCheck size={18} className="text-agro-green" /> Llave Criptográfica (.p12)
                       </h4>
-                      <div className="border border-dashed border-gray-300 dark:border-gray-700 rounded-xl p-8 flex flex-col items-center justify-center text-center bg-gray-50/50 dark:bg-gray-900/20">
-                         <div className="w-12 h-12 bg-white dark:bg-gray-800 rounded-full flex items-center justify-center shadow-sm mb-3">
-                            <Server className="text-gray-400" />
-                         </div>
-                         <p className="font-medium text-gray-800 dark:text-gray-200">El certificado está cargado en el motor Backend</p>
-                         <p className="text-xs text-gray-500 mt-1">Validez restante: 342 Días (Firma XAdES-EPES activa)</p>
+                      <div className="space-y-4">
+                        <div className="flex gap-4 items-center">
+                          <input 
+                            type="password" 
+                            className="liquid-input flex-1" 
+                            placeholder="Contraseña del certificado .p12"
+                            value={settings.haciendaKeystorePassword || ''}
+                            onChange={e => handleChange('haciendaKeystorePassword', e.target.value)}
+                          />
+                        </div>
+                        <div className="border border-dashed border-gray-300 dark:border-gray-700 rounded-xl p-6 flex flex-col items-center justify-center text-center bg-gray-50/50 dark:bg-gray-900/20">
+                           <HardDrive className="text-gray-400 mb-2" />
+                           <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                             {certFile ? certFile.name : (settings.hasCertificate ? '✅ Certificado cargado en sistema' : 'Subir archivo de certificado (.p12)')}
+                           </p>
+                           <input 
+                             type="file" 
+                             accept=".p12" 
+                             className="hidden" 
+                             id="cert-upload" 
+                             onChange={e => setCertFile(e.target.files?.[0] || null)}
+                           />
+                           <label 
+                             htmlFor="cert-upload"
+                             className="mt-3 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-xs font-bold cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                           >
+                             {certFile ? 'Cambiar Archivo' : 'Seleccionar Archivo'}
+                           </label>
+                        </div>
                       </div>
                    </div>
                 </motion.div>
@@ -265,15 +401,45 @@ export default function SettingsView() {
                              value={settings.province}
                              onChange={e => handleChange('province', e.target.value)}
                            >
-                              <option>San José</option>
-                              <option>Alajuela</option>
-                              <option>Cartago</option>
-                              <option>Heredia</option>
-                              <option>Guanacaste</option>
-                              <option>Puntarenas</option>
-                              <option>Limón</option>
+                               <option value="1">San José (1)</option>
+                               <option value="2">Alajuela (2)</option>
+                               <option value="3">Cartago (3)</option>
+                               <option value="4">Heredia (4)</option>
+                               <option value="5">Guanacaste (5)</option>
+                               <option value="6">Puntarenas (6)</option>
+                               <option value="7">Limón (7)</option>
                            </select>
                         </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Cantón (Código 2 dígitos)</label>
+                            <input
+                              type="text"
+                              className="w-full bg-slate-50 dark:bg-slate-800/50 border-none rounded-2xl px-5 py-4 text-slate-800 dark:text-white font-bold focus:ring-2 focus:ring-premium-emerald/20 outline-none transition-all"
+                              placeholder="Ej: 01"
+                              value={settings.canton || ''}
+                              onChange={e => handleChange('canton', e.target.value)}
+                            />
+                         </div>
+                         <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Distrito (Código 2 dígitos)</label>
+                            <input
+                              type="text"
+                              className="w-full bg-slate-50 dark:bg-slate-800/50 border-none rounded-2xl px-5 py-4 text-slate-800 dark:text-white font-bold focus:ring-2 focus:ring-premium-emerald/20 outline-none transition-all"
+                              placeholder="Ej: 01"
+                              value={settings.distrito || ''}
+                              onChange={e => handleChange('distrito', e.target.value)}
+                            />
+                         </div>
+                         <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Barrio (Código 2 dígitos)</label>
+                            <input
+                              type="text"
+                              className="w-full bg-slate-50 dark:bg-slate-800/50 border-none rounded-2xl px-5 py-4 text-slate-800 dark:text-white font-bold focus:ring-2 focus:ring-premium-emerald/20 outline-none transition-all"
+                              placeholder="Ej: 01"
+                              value={settings.barrio || ''}
+                              onChange={e => handleChange('barrio', e.target.value)}
+                            />
+                         </div>
                         <div className="space-y-2">
                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Moneda Principal</label>
                            <select
@@ -300,10 +466,10 @@ export default function SettingsView() {
                              <label className="font-bold text-orange-800 dark:text-orange-400">Régimen Exento de Impuestos</label>
                              <p className="text-xs text-orange-600 dark:text-orange-500/80 mt-1">Habilita esta opción si tu negocio pertenece al Régimen de Tributación Simplificada o Agropecuario sin IVA.</p>
                            </div>
-                           <label className="relative inline-flex items-center cursor-pointer">
-                             <input type="checkbox" className="sr-only peer" checked={settings.taxExempt} onChange={e => handleChange('taxExempt', e.target.checked ? 'true' : '')} />
-                             <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-orange-500"></div>
-                           </label>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input type="checkbox" className="sr-only peer" checked={settings.taxExempt} onChange={e => handleChange('taxExempt', e.target.checked)} />
+                              <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-orange-500"></div>
+                            </label>
                         </div>
                     </div>
                 </motion.div>
@@ -365,6 +531,194 @@ export default function SettingsView() {
                       </div>
                    </div>
                    <p className="text-slate-500 dark:text-slate-400 text-sm">Módulo en desarrollo. Disponible en próxima versión.</p>
+                </motion.div>
+             )}
+
+             {activeTab === 'profile' && (
+                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6 max-w-3xl">
+                   <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl p-4 flex gap-4">
+                      <div className="p-2 bg-indigo-100 dark:bg-indigo-900/50 rounded-lg text-indigo-600 dark:text-indigo-400 h-fit">
+                         <UserCircle size={24} />
+                      </div>
+                      <div>
+                         <h4 className="font-bold text-indigo-900 dark:text-indigo-300">Editar Perfil de Acceso</h4>
+                         <p className="text-sm text-indigo-700 dark:text-indigo-400/80 mt-1">Actualiza el usuario o contraseña de tu cuenta actual ({currentUser?.username}).</p>
+                      </div>
+                   </div>
+
+                   <div className="space-y-6">
+                      <div className="space-y-2">
+                         <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Contraseña Actual <span className="text-red-500">*</span></label>
+                         <p className="text-xs text-slate-500 mb-1">Necesaria para autorizar cualquier cambio.</p>
+                         <input 
+                           type="password" 
+                           className="liquid-input w-full" 
+                           value={profileData.currentPassword}
+                           onChange={e => setProfileData({...profileData, currentPassword: e.target.value})}
+                         />
+                      </div>
+
+                       <div className="space-y-2">
+                          <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Correo Electrónico Actualizado</label>
+                          <input 
+                            type="email" 
+                            className="liquid-input w-full" 
+                            placeholder={currentUser?.email || 'tu@correo.com'}
+                            value={profileData.newEmail}
+                            onChange={e => setProfileData({...profileData, newEmail: e.target.value})}
+                          />
+                       </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                           <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Nuevo Nombre de Usuario</label>
+                           <input 
+                             type="text" 
+                             className="liquid-input w-full" 
+                             placeholder={currentUser?.username}
+                             value={profileData.newUsername}
+                             onChange={e => setProfileData({...profileData, newUsername: e.target.value})}
+                           />
+                        </div>
+                        <div className="space-y-2">
+                           <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Nueva Contraseña</label>
+                           <input 
+                             type="password" 
+                             className="liquid-input w-full" 
+                             placeholder="Dejar en blanco para no cambiar"
+                             value={profileData.newPassword}
+                             onChange={e => setProfileData({...profileData, newPassword: e.target.value})}
+                           />
+                        </div>
+                      </div>
+
+                      <div className="pt-4 flex justify-end">
+                         <button 
+                           onClick={async () => {
+                              if (!profileData.currentPassword) {
+                                  toast.error("Debes ingresar tu contraseña actual.");
+                                  return;
+                              }
+                              const loadId = toast.loading('Actualizando perfil...');
+                              try {
+                                 const res = await updateProfile({
+                                     currentPassword: profileData.currentPassword,
+                                     newUsername: profileData.newUsername || undefined,
+                                     newPassword: profileData.newPassword || undefined,
+                                     newEmail: profileData.newEmail || undefined
+                                 });
+                                 toast.success(typeof res === 'string' ? res : 'Perfil actualizado con éxito.', { id: loadId });
+                                 setProfileData({ currentPassword: '', newUsername: '', newPassword: '', newEmail: '' });
+                                 setTimeout(() => { authService.logout(); window.location.href = '/login'; }, 2000);
+                              } catch(e: any) {
+                                 toast.error(e.response?.data || 'Error al actualizar', { id: loadId });
+                              }
+                           }}
+                           className="liquid-btn-primary px-6 py-2 shadow-sm text-sm flex items-center gap-2 font-semibold transition-transform hover:scale-[1.02]"
+                         >
+                           <Save size={18} /> Actualizar Credenciales
+                         </button>
+                      </div>
+                   </div>
+                </motion.div>
+             )}
+
+             {activeTab === 'users' && isAdmin && (
+                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-8 max-w-4xl">
+                   <div className="bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-800 rounded-xl p-4 flex gap-4">
+                      <div className="p-2 bg-cyan-100 dark:bg-cyan-900/50 rounded-lg text-cyan-600 dark:text-cyan-400 h-fit">
+                         <Users size={24} />
+                      </div>
+                      <div>
+                         <h4 className="font-bold text-cyan-900 dark:text-cyan-300">Gestión de Usuarios del Sistema</h4>
+                         <p className="text-sm text-cyan-700 dark:text-cyan-400/80 mt-1">Crea nuevas cuentas de acceso y gestiona los trabajadores del sistema. Los correos deben ser reales para que los trabajadores puedan recuperar su contraseña si la olvidan.</p>
+                      </div>
+                   </div>
+
+                   <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-6">
+                      <h3 className="font-bold text-lg mb-4 text-slate-800 dark:text-white">Añadir Nuevo Empleado</h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                         <input type="text" className="liquid-input text-sm" placeholder="Nombre de Usuario (ej. cajero1)" value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} />
+                         <input type="email" className="liquid-input text-sm" placeholder="Correo (MUUY IMPORTANTE)" value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} />
+                         <input type="password" className="liquid-input text-sm" placeholder="Contraseña Temporal" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} />
+                         <select className="liquid-input text-sm" value={newUser.role[0]} onChange={e => setNewUser({...newUser, role: [e.target.value]})}>
+                             <option value="user">Cajero (ROLE_USER)</option>
+                             <option value="admin">Administrador (ROLE_ADMIN)</option>
+                         </select>
+                      </div>
+                      <div className="mt-4 flex justify-end">
+                         <button 
+                           onClick={async () => {
+                               if (!newUser.username || !newUser.password || !newUser.email) return toast.error('Llene todos los campos');
+                               setUserLoading(true);
+                               const loadingToast = toast.loading('Creando cuenta...');
+                               try {
+                                   await createUser(newUser);
+                                   toast.success('Cuenta creada exitosamente', { id: loadingToast });
+                                   setUsersList(await getUsers());
+                                   setNewUser({ username: '', name: '', email: '', password: '', role: ['user'] });
+                               } catch(e:any) {
+                                   toast.error(e.response?.data || 'Error al crear', { id: loadingToast });
+                               } finally {
+                                   setUserLoading(false);
+                               }
+                           }}
+                           disabled={userLoading}
+                           className="bg-cyan-600 hover:bg-cyan-700 text-white px-5 py-2 rounded-lg font-bold flex items-center gap-2 text-sm transition-colors disabled:opacity-50"
+                         >
+                           <Plus size={16} /> Crear Cuenta
+                         </button>
+                      </div>
+                   </div>
+
+                   <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+                      <table className="w-full text-left text-sm">
+                         <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 text-slate-500 font-semibold">
+                            <tr>
+                               <th className="p-4">Usuario</th>
+                               <th className="p-4">Correo Electrónico</th>
+                               <th className="p-4">Rol en Sistema</th>
+                               <th className="p-4 text-right">Acciones</th>
+                            </tr>
+                         </thead>
+                         <tbody>
+                            {usersList.map(u => (
+                               <tr key={u.id} className="border-b border-slate-100 dark:border-slate-800/50 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                                  <td className="p-4 font-bold text-slate-800 dark:text-slate-200">{u.username}</td>
+                                  <td className="p-4 text-slate-500">{u.email}</td>
+                                  <td className="p-4">
+                                     <span className={`px-2 py-1 text-[10px] font-black uppercase tracking-wider rounded-md ${u.roles?.some((r:any) => r.name === 'ROLE_ADMIN') ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}`}>
+                                        {u.roles?.some((r:any) => r.name === 'ROLE_ADMIN') ? 'Administrador' : 'Cajero'}
+                                     </span>
+                                  </td>
+                                  <td className="p-4 text-right">
+                                     <button 
+                                        disabled={u.username === currentUser?.username}
+                                        onClick={async () => {
+                                            if(!window.confirm(`¿Seguro que deseas eliminar a ${u.username}?`)) return;
+                                            const tl = toast.loading('Eliminando...');
+                                            try {
+                                                await deleteUser(u.id);
+                                                setUsersList(usersList.filter(x => x.id !== u.id));
+                                                toast.success('Eliminado correctamente', { id: tl });
+                                            } catch(e) {
+                                                toast.error('Error al eliminar', { id: tl });
+                                            }
+                                        }}
+                                        className="text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 p-2 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                        title={u.username === currentUser?.username ? 'No puedes eliminarte a ti mismo' : 'Eliminar Cuenta'}
+                                     >
+                                        <Trash2 size={16} />
+                                     </button>
+                                  </td>
+                               </tr>
+                            ))}
+                            {usersList.length === 0 && (
+                               <tr><td colSpan={4} className="p-6 text-center text-slate-500 font-medium">No hay usuarios registrados o cargando...</td></tr>
+                            )}
+                         </tbody>
+                      </table>
+                   </div>
                 </motion.div>
              )}
 

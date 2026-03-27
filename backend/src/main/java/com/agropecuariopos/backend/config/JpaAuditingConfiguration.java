@@ -23,7 +23,9 @@ public class JpaAuditingConfiguration {
                     || authentication.getPrincipal().equals("anonymousUser")) {
                 return Optional.of("SYSTEM");
             }
-            return Optional.of(((UserDetails) authentication.getPrincipal()).getUsername());
+            @SuppressWarnings("null")
+            Optional<String> username = Optional.of(((UserDetails) authentication.getPrincipal()).getUsername());
+            return username;
         };
     }
 }

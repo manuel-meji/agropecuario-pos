@@ -58,6 +58,15 @@ public class CashClosing {
     @Column(precision = 14, scale = 2)
     private BigDecimal totalExpenses = BigDecimal.ZERO;
 
+    @Column(precision = 14, scale = 2)
+    private BigDecimal totalCashExpense = BigDecimal.ZERO;
+
+    @Column(precision = 14, scale = 2)
+    private BigDecimal totalCardExpense = BigDecimal.ZERO;
+
+    @Column(precision = 14, scale = 2)
+    private BigDecimal totalSinpeExpense = BigDecimal.ZERO;
+
     // ─── Net ─────────────────────────────────────────────────
     @Column(precision = 14, scale = 2)
     private BigDecimal netCash = BigDecimal.ZERO;   // cash + sinpe + card - expenses

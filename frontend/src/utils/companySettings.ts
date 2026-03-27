@@ -1,7 +1,7 @@
-/** Clave usada por SettingsView para guardar los datos de empresa */
-export const SETTINGS_KEY = 'agropecuario_company_settings';
+import * as api from '../services/api';
 
 export interface CompanySettings {
+  id?: number;
   businessName: string;
   legalId: string;
   phone: string;
@@ -9,28 +9,70 @@ export interface CompanySettings {
   address: string;
   province: string;
   currency: string;
-  printMode?: 'browser' | 'escpos';
+  printMode: 'browser' | 'escpos';
   printerName?: string;
+  cashierName?: string;
+  taxExempt: boolean;
+  
+  // Hacienda
+  haciendaUsername?: string;
+  haciendaPassword?: string;
+  haciendaAmbiente: 'stag' | 'prod';
+  haciendaClientId: string;
+  haciendaTokenUrl?: string;
+  haciendaRecepcionUrl?: string;
+  haciendaKeystorePassword?: string;
+  haciendaActividadEconomica?: string;
+  canton?: string;
+  distrito?: string;
+  barrio?: string;
+  hasCertificate?: boolean;
+  enabledPaymentMethods?: string[];
 }
 
-const DEFAULTS: CompanySettings = {
+export const DEFAULTS: CompanySettings = {
   businessName: 'Agropecuario S.A.',
   legalId: '',
   phone: '',
   email: '',
   address: '',
-  province: 'San José',
   currency: 'CRC',
   printMode: 'browser',
   printerName: '',
+  cashierName: '',
+  taxExempt: false,
+  haciendaAmbiente: 'stag',
+  haciendaClientId: 'api-stag',
+  province: '1',
+  canton: '01',
+  distrito: '01',
+  barrio: '01',
+  haciendaActividadEconomica: '512102',
+  enabledPaymentMethods: ['CASH', 'SINPE_MOVIL', 'CARD', 'TRANSFER', 'CREDIT']
 };
 
-/** Lee la configuración de empresa desde localStorage.
- *  Si no hay datos guardados retorna los valores por defecto. */
-export function getCompanySettings(): CompanySettings {
+/** Lee la configuración de empresa desde el Backend. */
+export async function getCompanySettings(): Promise<CompanySettings> {
   try {
-    const raw = localStorage.getItem(SETTINGS_KEY);
-    if (raw) return { ...DEFAULTS, ...JSON.parse(raw) };
-  } catch {}
-  return { ...DEFAULTS };
+    const data = await api.getSettings();
+    return { ...DEFAULTS, ...data };
+  } catch (error) {
+    console.error("Error fetching settings:", error);
+    return { ...DEFAULTS };
+  }
+}
+
+/** Guarda la configuración en el Backend. */
+export async function saveCompanySettings(settings: CompanySettings): Promise<CompanySettings> {
+  try {
+    return await api.updateSettings(settings);
+  } catch (error) {
+    console.error("Error saving settings:", error);
+    throw error;
+  }
+}
+
+/** Carga el certificado .p12 al Backend. */
+export async function uploadCertificate(file: File): Promise<string> {
+  return await api.uploadCertificate(file);
 }

@@ -55,13 +55,16 @@ public class Sale {
     private BigDecimal finalTotal;
 
     // Financial Analysis Field (Stored at Sale time, unchangeable)
-    @DecimalMin("0.0")
+    // NOTE: Can be negative if discounts exceed the profit margin (valid scenario)
     @Column(precision = 12, scale = 2)
     private BigDecimal totalGrossProfit;
 
     // Identification (Receiver ID for CR Tributation)
     private String clientName;
     private String clientIdentification; // optional
+
+    @Column(length = 100)
+    private String sellerName; // Name of the user who made the sale
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_client")

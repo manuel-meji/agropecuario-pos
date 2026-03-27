@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { User, Lock, ArrowRight, ShieldCheck, Leaf } from 'lucide-react';
+import { User, Lock, ArrowRight, ShieldCheck, Leaf, Mail } from 'lucide-react';
 import toast from 'react-hot-toast';
 import authService from '../../services/authService';
 
@@ -9,6 +9,9 @@ export default function LoginView() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showRecoveryModal, setShowRecoveryModal] = useState(false);
+  const [recoveryEmail, setRecoveryEmail] = useState('');
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -23,6 +26,23 @@ export default function LoginView() {
       console.error(error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRecovery = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!recoveryEmail) return;
+    setRecoveryLoading(true);
+    const loadId = toast.loading('Generando nueva contraseña...');
+    try {
+       await authService.recoverPassword(recoveryEmail);
+       toast.success('Nueva contraseña enviada a su correo. Por favor revise su bandeja de entrada.', { id: loadId });
+       setShowRecoveryModal(false);
+       setRecoveryEmail('');
+    } catch(error: any) {
+       toast.error(error.response?.data || 'Error al recuperar contraseña. Verifique su correo electrónico.', { id: loadId });
+    } finally {
+       setRecoveryLoading(false);
     }
   };
 
@@ -92,7 +112,7 @@ export default function LoginView() {
                     </div>
                     <span className="text-xs font-bold text-slate-500 group-hover:text-slate-700 dark:group-hover:text-slate-300 transition-colors">Recordarme</span>
                  </label>
-                 <a href="#" className="text-xs font-black text-premium-emerald hover:underline">¿Olvidaste tu contraseña?</a>
+                 <a href="#" onClick={(e) => { e.preventDefault(); setShowRecoveryModal(true); }} className="text-xs font-black text-premium-emerald hover:underline">¿Olvidaste tu contraseña?</a>
               </div>
 
               <button 
@@ -107,9 +127,50 @@ export default function LoginView() {
         </div>
 
         <p className="text-center mt-10 text-sm font-medium text-slate-500">
-           ¿No tienes una cuenta? <span className="text-premium-emerald font-black hover:underline cursor-pointer">Solicitar Acceso</span>
+           ¿No tienes una cuenta? <span className="text-premium-emerald font-black hover:underline cursor-pointer" onClick={() => toast("Para solicitar acceso, por favor comuníquese con el administrador del sistema.", { icon: 'ℹ️', duration: 4000 })}>Solicitar Acceso</span>
         </p>
       </motion.div>
+
+      {/* Password Recovery Modal */}
+      {showRecoveryModal && (
+         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="premium-panel bg-white dark:bg-slate-900 w-full max-w-md p-8 relative">
+               <div className="flex items-center gap-4 mb-6">
+                  <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/40 text-premium-emerald rounded-2xl flex items-center justify-center">
+                     <Lock size={24} />
+                  </div>
+                  <div>
+                     <h3 className="text-xl font-bold dark:text-white">Recuperar Contraseña</h3>
+                     <p className="text-xs text-slate-500">Se enviará una contraseña temporal a su correo.</p>
+                  </div>
+               </div>
+               <form onSubmit={handleRecovery} className="space-y-6">
+                  <div className="space-y-2">
+                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Correo Electrónico de la cuenta</label>
+                     <div className="relative group">
+                        <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-premium-emerald transition-colors">
+                           <Mail size={20} />
+                        </div>
+                        <input 
+                          type="email" 
+                          required
+                          placeholder="tu@correo.com"
+                          className="w-full bg-slate-100/50 dark:bg-slate-800/50 border-none rounded-3xl pl-14 pr-6 py-4 text-slate-900 dark:text-white font-bold outline-none focus:ring-2 focus:ring-premium-emerald/10 transition-all placeholder:text-slate-400"
+                          value={recoveryEmail}
+                          onChange={(e) => setRecoveryEmail(e.target.value)}
+                        />
+                     </div>
+                  </div>
+                  <div className="flex gap-4">
+                     <button type="button" onClick={() => setShowRecoveryModal(false)} className="flex-1 py-4 text-slate-600 dark:text-slate-400 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 rounded-3xl transition-colors">Cancelar</button>
+                     <button type="submit" disabled={recoveryLoading} className="flex-1 btn-premium-emerald py-4 rounded-3xl font-black shadow-lg shadow-premium-emerald/20 disabled:opacity-50">
+                        {recoveryLoading ? 'Enviando...' : 'Enviar Correo'}
+                     </button>
+                  </div>
+               </form>
+            </motion.div>
+         </div>
+      )}
     </div>
   );
 }

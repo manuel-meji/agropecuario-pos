@@ -50,6 +50,9 @@ public class SaleController {
     private AccountReceivableRepository accountReceivableRepository;
 
     @Autowired
+    private com.agropecuariopos.backend.repositories.UserRepository userRepository;
+
+    @Autowired
     private PasswordEncoder encoder;
 
     @Autowired
@@ -135,7 +138,7 @@ public class SaleController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Sale> getSaleById(@PathVariable Long id) {
+    public ResponseEntity<Sale> getSaleById(@PathVariable @org.springframework.lang.NonNull Long id) {
         return saleRepository.findById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
@@ -143,7 +146,7 @@ public class SaleController {
 
     @DeleteMapping("/{id}")
     @Transactional
-    public ResponseEntity<?> deleteSale(@PathVariable Long id, @RequestBody DeleteSaleRequest deleteRequest) {
+    public ResponseEntity<?> deleteSale(@PathVariable @org.springframework.lang.NonNull Long id, @RequestBody DeleteSaleRequest deleteRequest) {
         Sale sale = saleRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Venta no encontrada"));
 
@@ -154,7 +157,12 @@ public class SaleController {
         }
 
         UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
-        if (!encoder.matches(deleteRequest.getPassword(), userDetails.getPassword())) {
+        
+        // Cargar el usuario fresco desde la DB para asegurar que el hash esté disponible
+        com.agropecuariopos.backend.models.User user = userRepository.findById(userDetails.getId())
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+
+        if (!encoder.matches(deleteRequest.getPassword(), user.getPassword())) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body("Contraseña incorrecta. No se puede eliminar la venta.");
         }
@@ -169,6 +177,12 @@ public class SaleController {
         // Eliminar cuenta por cobrar si existía
         Optional<AccountReceivable> receivable = accountReceivableRepository.findByRelatedSale(sale);
         receivable.ifPresent(accountReceivableRepository::delete);
+
+        // Eliminar facturas electrónicas asociadas para evitar restricción de llave foránea
+        List<ElectronicInvoice> invoices = electronicInvoiceRepository.findBySaleId(id);
+        if (!invoices.isEmpty()) {
+            electronicInvoiceRepository.deleteAll(invoices);
+        }
 
         // Eliminar la venta
         saleRepository.delete(sale);
@@ -214,7 +228,7 @@ public class SaleController {
     }
 
     @PostMapping("/{id}/email-receipt")
-    public ResponseEntity<?> emailReceipt(@PathVariable Long id, @RequestBody java.util.Map<String, String> payload) {
+    public ResponseEntity<?> emailReceipt(@PathVariable @org.springframework.lang.NonNull Long id, @RequestBody java.util.Map<String, String> payload) {
         try {
             Sale sale = saleRepository.findById(id).orElseThrow(() -> new RuntimeException("Venta no encontrada"));
             String pdfBase64 = payload.get("pdfBase64");
@@ -223,7 +237,7 @@ public class SaleController {
                 return ResponseEntity.badRequest().body("El cliente no tiene un correo registrado.");
             }
 
-            Optional<ElectronicInvoice> invoice = electronicInvoiceRepository.findBySaleId(sale.getId());
+            Optional<ElectronicInvoice> invoice = electronicInvoiceRepository.findBySaleId(sale.getId()).stream().findFirst();
             
             invoiceEmailService.sendReceiptPdf(sale, sale.getClient().getEmail(), pdfBase64, invoice.orElse(null));
             return ResponseEntity.ok("Correo enviado exitosamente.");

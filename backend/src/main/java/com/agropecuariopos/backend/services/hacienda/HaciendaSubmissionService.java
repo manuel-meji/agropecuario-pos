@@ -1,11 +1,12 @@
 package com.agropecuariopos.backend.services.hacienda;
 
+import com.agropecuariopos.backend.models.CompanySettings;
 import com.agropecuariopos.backend.models.ElectronicInvoice;
+import com.agropecuariopos.backend.repositories.CompanySettingsRepository;
 import com.agropecuariopos.backend.repositories.ElectronicInvoiceRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -30,14 +31,8 @@ public class HaciendaSubmissionService {
 
     private static final Logger logger = LoggerFactory.getLogger(HaciendaSubmissionService.class);
 
-    @Value("${hacienda.api.recepcion.url}")
-    private String recepcionUrl;
-
-    @Value("${hacienda.emisor.cedula}")
-    private String emisorCedula;
-
-    @Value("${hacienda.emisor.tipo.cedula}")
-    private String emisorTipoCedula;
+    @Autowired
+    private CompanySettingsRepository settingsRepository;
 
     @Autowired
     private HaciendaAuthClientService authService;
@@ -52,10 +47,22 @@ public class HaciendaSubmissionService {
      * Envía el comprobante firmado a la API de Hacienda.
      * REQUIRES_NEW: si Hacienda falla, el comprobante queda en BD igual (estado ERROR_ENVIO).
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, noRollbackFor = Exception.class)
     public void enviarComprobante(ElectronicInvoice invoice) {
+        CompanySettings settings = settingsRepository.findFirst()
+                .orElseThrow(() -> new RuntimeException("No se encontró la configuración de la empresa."));
+
         try {
             String token = authService.getValidAccessToken();
+            if (token != null) token = token.trim();
+            logger.info("🔑 Token obtenido (longitud: {}). Destino: {}", 
+                    token != null ? token.length() : 0, settings.getHaciendaRecepcionUrl());
+            
+            // Si el XML firmado es nulo o vacío por alguna razón, no podemos enviarlo
+            if (invoice.getXmlFirmadoBase64() == null || invoice.getXmlFirmadoBase64().isBlank()) {
+                throw new RuntimeException("El XML firmado está vacío. No se puede enviar a Hacienda.");
+            }
+
             String xmlBase64 = Base64.getEncoder().encodeToString(
                     invoice.getXmlFirmadoBase64().getBytes("UTF-8")
             );
@@ -70,47 +77,68 @@ public class HaciendaSubmissionService {
             body.put("clave", invoice.getClave());
             body.put("fecha", fechaFormateada);
             body.put("emisor", Map.of(
-                    "tipoIdentificacion", emisorTipoCedula,
-                    "numeroIdentificacion", emisorCedula
+                    "tipoIdentificacion", settings.getLegalId().length() > 10 ? "02" : "01", // Simplificación o usar campo específico
+                    "numeroIdentificacion", settings.getLegalId()
             ));
             body.put("comprobanteXml", xmlBase64);
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.setBearerAuth(token);
+            // Construcción manual del header para evitar problemas de compatibilidad en el WAF de Hacienda
+            headers.set("Authorization", "Bearer " + token.trim());
 
+            @SuppressWarnings("null")
             HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
-            RestTemplate restTemplate = new RestTemplate();
+            
+            // Configurar RestTemplate con timeouts
+            org.springframework.http.client.SimpleClientHttpRequestFactory factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
+            factory.setConnectTimeout(10000); // 10s
+            factory.setReadTimeout(15000);    // 15s
+            RestTemplate restTemplate = new RestTemplate(factory);
 
-            ResponseEntity<String> response = restTemplate.postForEntity(recepcionUrl, request, String.class);
+            String url = settings.getHaciendaRecepcionUrl();
+            if (url == null) throw new RuntimeException("URL de recepción de Hacienda no configurada.");
+            
+            ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
 
             if (response.getStatusCode() == HttpStatus.ACCEPTED || response.getStatusCode().is2xxSuccessful()) {
                 invoice.setEstado(ElectronicInvoice.EstadoComprobante.ENVIADO);
                 invoice.setFechaEnvio(LocalDateTime.now());
-                logger.info("Comprobante {} enviado exitosamente a Hacienda. Estado: {}", invoice.getClave(), response.getStatusCode());
+                logger.info("✅ Comprobante {} enviado exitosamente a Hacienda. Estado: {}", invoice.getClave(), response.getStatusCode());
+                invoice.setMensajeRespuesta("Enviado exitosamente: " + response.getStatusCode());
             } else {
                 invoice.setEstado(ElectronicInvoice.EstadoComprobante.ERROR_ENVIO);
                 invoice.setMensajeRespuesta("HTTP " + response.getStatusCode() + ": " + response.getBody());
-                logger.warn("Respuesta inesperada de Hacienda: {}", response.getStatusCode());
+                logger.warn("⚠️ Respuesta inesperada de Hacienda para {}: {}", invoice.getClave(), response.getStatusCode());
             }
 
             invoice.setIntentosEnvio(invoice.getIntentosEnvio() + 1);
             invoiceRepository.save(invoice);
 
         } catch (HttpClientErrorException e) {
-            logger.error("Error HTTP enviando comprobante a Hacienda: {} - Body: {}", e.getStatusCode(), e.getResponseBodyAsString());
+            logger.error("❌ Error HTTP ({}) enviando comprobante {}: {}", e.getStatusCode(), invoice.getClave(), e.getResponseBodyAsString());
+            
+            // Si es 401 o 403, invalidamos el token actual para forzar uno nuevo en el siguiente intento
+            if (e.getStatusCode() == HttpStatus.UNAUTHORIZED || e.getStatusCode() == HttpStatus.FORBIDDEN) {
+                authService.invalidateToken();
+            }
+            
             invoice.setEstado(ElectronicInvoice.EstadoComprobante.ERROR_ENVIO);
             invoice.setMensajeRespuesta("Error " + e.getStatusCode() + ": " + e.getResponseBodyAsString());
             invoice.setIntentosEnvio(invoice.getIntentosEnvio() + 1);
             invoiceRepository.save(invoice);
-            throw new RuntimeException("Hacienda rechazó el comprobante: " + e.getResponseBodyAsString(), e);
+            throw new RuntimeException("Hacienda rechazó el comprobante (" + e.getStatusCode() + "): " + e.getResponseBodyAsString(), e);
         } catch (Exception e) {
-            logger.error("Error enviando comprobante {} a Hacienda: {}", invoice.getClave(), e.getMessage());
+            logger.error("❌ Error de comunicación enviando comprobante {}: {} - Causa: {}", 
+                    invoice.getClave(), e.getMessage(), 
+                    e.getCause() != null ? e.getCause().getMessage() : "N/A", e);
+            
             invoice.setEstado(ElectronicInvoice.EstadoComprobante.ERROR_ENVIO);
-            invoice.setMensajeRespuesta(e.getMessage());
+            invoice.setMensajeRespuesta("Error de comunicación: " + e.getMessage());
             invoice.setIntentosEnvio(invoice.getIntentosEnvio() + 1);
             invoiceRepository.save(invoice);
-            throw new RuntimeException("Fallo de comunicación con Hacienda", e);
+            
+            throw new RuntimeException("Fallo de comunicación con Hacienda: " + e.getMessage(), e);
         }
     }
 
@@ -120,16 +148,24 @@ public class HaciendaSubmissionService {
      */
     @Transactional
     public void consultarEstado(ElectronicInvoice invoice) {
+        CompanySettings settings = settingsRepository.findFirst()
+                .orElseThrow(() -> new RuntimeException("No se encontró la configuración de la empresa."));
         try {
             String token = authService.getValidAccessToken();
-            String url = recepcionUrl + "/" + invoice.getClave();
+            String url = settings.getHaciendaRecepcionUrl() + "/" + invoice.getClave();
 
             HttpHeaders headers = new HttpHeaders();
             headers.setBearerAuth(token);
+            @SuppressWarnings("null")
             HttpEntity<Void> request = new HttpEntity<>(headers);
 
-            RestTemplate restTemplate = new RestTemplate();
-            @SuppressWarnings("unchecked")
+            // Configurar RestTemplate con timeouts
+            org.springframework.http.client.SimpleClientHttpRequestFactory factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
+            factory.setConnectTimeout(8000); // 8s
+            factory.setReadTimeout(10000);   // 10s
+            RestTemplate restTemplate = new RestTemplate(factory);
+
+            @SuppressWarnings({"unchecked", "null"})
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     url, HttpMethod.GET, request,
                     (Class<Map<String, Object>>) (Class<?>) Map.class
@@ -137,7 +173,9 @@ public class HaciendaSubmissionService {
 
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 Map<String, Object> body = response.getBody();
+                @SuppressWarnings("null")
                 String estadoHacienda = (String) body.get("ind-estado");
+                @SuppressWarnings("null")
                 String xmlRespuesta = (String) body.get("respuesta-xml");
 
                 invoice.setFechaRespuesta(LocalDateTime.now());
@@ -216,12 +254,24 @@ public class HaciendaSubmissionService {
      * Daemon que consulta el estado de comprobantes enviados pero no resueltos.
      * Corre cada 2 minutos automáticamente.
      */
-    @Scheduled(fixedDelay = 120000)
+    @Scheduled(fixedDelay = 60000) // Cada 1 minuto para mayor fluidez en prod
     public void pollingDaemon() {
         List<ElectronicInvoice> pendientes = invoiceRepository.findPendingStatusCheck();
         if (!pendientes.isEmpty()) {
-            logger.info("Polling Hacienda: {} comprobantes en espera de respuesta", pendientes.size());
-            pendientes.forEach(this::consultarEstado);
+            logger.info("🔄 Polling Hacienda: procesando {} comprobantes pendientes/enviados", pendientes.size());
+            for (ElectronicInvoice inv : pendientes) {
+                try {
+                    if (inv.getEstado() == ElectronicInvoice.EstadoComprobante.PENDIENTE 
+                        || inv.getEstado() == ElectronicInvoice.EstadoComprobante.ERROR_ENVIO) {
+                        logger.info("🚀 Re-intentando envío inicial para comprobante {}", inv.getClave());
+                        this.enviarComprobante(inv);
+                    } else if (inv.getEstado() == ElectronicInvoice.EstadoComprobante.ENVIADO) {
+                        this.consultarEstado(inv);
+                    }
+                } catch (Exception e) {
+                    logger.warn("⚠️ Fallo en ciclo de polling para {}: {}", inv.getClave(), e.getMessage());
+                }
+            }
         }
     }
 }

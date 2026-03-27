@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Filter, FileText, CheckCircle2, Clock, DollarSign, ArrowLeft, History, User } from 'lucide-react';
 import { getReceivablesByClient, getClientHistory, makePayment, getPaymentRecords, makeClientBulkPayment } from '../../services/api';
 import toast from 'react-hot-toast';
+import PaymentMethodSelector, { getPaymentMethodMeta } from '../../components/PaymentMethodSelector';
 
 export default function ReceivablesView() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -19,6 +20,7 @@ export default function ReceivablesView() {
   const [showPaymentHistoryModal, setShowPaymentHistoryModal] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [isBulkPaymentModalOpen, setIsBulkPaymentModalOpen] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState('CASH');
 
   useEffect(() => {
     loadClients();
@@ -69,6 +71,7 @@ export default function ReceivablesView() {
   const handlePaymentClick = (receivableId: number) => {
     setPaymentId(receivableId);
     setPaymentAmount('');
+    setPaymentMethod('CASH');
     setShowPaymentModal(true);
   };
 
@@ -80,7 +83,7 @@ export default function ReceivablesView() {
     if (!paymentId) return;
     
     try {
-      await makePayment(paymentId, parseFloat(paymentAmount));
+      await makePayment(paymentId, parseFloat(paymentAmount), paymentMethod);
       toast.success("Pago registrado correctamente");
       setShowPaymentModal(false);
       setPaymentAmount('');
@@ -111,7 +114,7 @@ export default function ReceivablesView() {
     if (!selectedClient) return;
     
     try {
-      await makeClientBulkPayment(selectedClient.clientName, parseFloat(paymentAmount));
+      await makeClientBulkPayment(selectedClient.clientName, parseFloat(paymentAmount), paymentMethod);
       toast.success("Abono masivo registrado correctamente");
       setIsBulkPaymentModalOpen(false);
       setPaymentAmount('');
@@ -392,6 +395,7 @@ export default function ReceivablesView() {
                       autoFocus
                     />
                  </div>
+                 <PaymentMethodSelector value={paymentMethod} onChange={setPaymentMethod} />
                  <div className="flex gap-4">
                    <button onClick={() => setShowPaymentModal(false)} className="flex-1 py-4 text-slate-500 font-bold hover:bg-slate-50 dark:hover:bg-slate-800 rounded-2xl transition-colors">Cancelar</button>
                    <button onClick={handlePayment} className="flex-1 btn-premium-emerald py-4">Confirmar</button>
@@ -424,6 +428,7 @@ export default function ReceivablesView() {
                       autoFocus
                     />
                  </div>
+                 <PaymentMethodSelector value={paymentMethod} onChange={setPaymentMethod} />
                  <div className="flex gap-4">
                    <button onClick={() => setIsBulkPaymentModalOpen(false)} className="flex-1 py-4 text-slate-500 font-bold hover:bg-slate-50 dark:hover:bg-slate-800 rounded-2xl transition-colors">Cancelar</button>
                    <button onClick={handleBulkPayment} className="flex-1 btn-premium-emerald py-4">Confirmar</button>
@@ -462,6 +467,14 @@ export default function ReceivablesView() {
                                   <div>
                                       <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{payment.invoiceNumber}</p>
                                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">{new Date(payment.paymentDate).toLocaleString('es-CR')}</p>
+                                      {payment.paymentMethod && (() => {
+                                         const meta = getPaymentMethodMeta(payment.paymentMethod);
+                                         return meta ? (
+                                           <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">
+                                             <meta.Icon size={10} className={meta.color} /> {meta.label}
+                                           </span>
+                                         ) : null;
+                                       })()}
                                   </div>
                               </div>
                               <div className="text-right">

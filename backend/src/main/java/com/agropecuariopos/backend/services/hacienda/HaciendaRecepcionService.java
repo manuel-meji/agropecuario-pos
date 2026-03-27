@@ -5,7 +5,6 @@ import com.agropecuariopos.backend.repositories.ReceivedDocumentRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -37,11 +36,8 @@ public class HaciendaRecepcionService {
 
     private static final Logger logger = LoggerFactory.getLogger(HaciendaRecepcionService.class);
 
-    @Value("${hacienda.api.base.url:https://api-sandbox.comprobanteselectronicos.go.cr/recepcion/v1}")
-    private String haciendaBaseUrl;
-
-    @Value("${hacienda.emisor.cedula}")
-    private String emisorCedula;
+    @Autowired
+    private com.agropecuariopos.backend.repositories.CompanySettingsRepository settingsRepository;
 
     @Autowired
     private HaciendaAuthClientService authService;
@@ -57,15 +53,19 @@ public class HaciendaRecepcionService {
     public void sincronizarDocumentosRecibidos() {
         logger.info("Sincronizando documentos recibidos de Hacienda...");
         try {
+            com.agropecuariopos.backend.models.CompanySettings settings = settingsRepository.findFirst()
+                    .orElseThrow(() -> new RuntimeException("Configuración no encontrada para sincronización."));
+            
+            String baseUrl = settings.getHaciendaRecepcionUrl() != null ? settings.getHaciendaRecepcionUrl() : "https://api-sandbox.comprobanteselectronicos.go.cr/recepcion/v1";
             String token = authService.getValidAccessToken();
-            String url = haciendaBaseUrl + "/comprobantes?receptor=" + emisorCedula;
+            String url = baseUrl + "/comprobantes?receptor=" + settings.getLegalId();
 
             HttpHeaders headers = new HttpHeaders();
             headers.setBearerAuth(token);
             HttpEntity<Void> request = new HttpEntity<>(headers);
 
             RestTemplate restTemplate = new RestTemplate();
-            @SuppressWarnings("unchecked")
+            @SuppressWarnings({"unchecked", "null"})
             ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
                     url, HttpMethod.GET, request,
                     (Class<List<Map<String, Object>>>) (Class<?>) List.class
@@ -142,8 +142,12 @@ public class HaciendaRecepcionService {
 
         // 3. Consultar Hacienda
         try {
+            com.agropecuariopos.backend.models.CompanySettings settings = settingsRepository.findFirst()
+                    .orElseThrow(() -> new RuntimeException("Configuración no encontrada para importar."));
+            
+            String baseUrl = settings.getHaciendaRecepcionUrl() != null ? settings.getHaciendaRecepcionUrl() : "https://api-sandbox.comprobanteselectronicos.go.cr/recepcion/v1";
             String token = authService.getValidAccessToken();
-            String url = haciendaBaseUrl + "/comprobantes/" + clave;
+            String url = baseUrl + "/comprobantes/" + clave;
             HttpHeaders headers = new HttpHeaders();
             headers.setBearerAuth(token);
             HttpEntity<Void> req = new HttpEntity<>(headers);
@@ -156,11 +160,12 @@ public class HaciendaRecepcionService {
             );
 
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                ReceivedDocument doc = buildDocFromHaciendaResponse(clave, response.getBody(), "API");
+                Map<String, Object> body = response.getBody();
+                ReceivedDocument doc = buildDocFromHaciendaResponse(clave, body, "API");
                 receivedDocumentRepository.save(doc);
                 Map<String, Object> res = toPreviewMap(doc);
                 res.put("yaExistia", false);
-                res.put("estadoHacienda", response.getBody().getOrDefault("respuesta-xml", ""));
+                res.put("estadoHacienda", body.getOrDefault("respuesta-xml", ""));
                 return res;
             } else {
                 throw new RuntimeException("Hacienda no encontró el comprobante con esa clave");
@@ -503,12 +508,17 @@ public class HaciendaRecepcionService {
     @SuppressWarnings("unchecked")
     private void descargarYGuardar(String clave, Map<String, Object> metadatos, String token, String fuente) {
         try {
-            String url = haciendaBaseUrl + "/comprobantes/" + clave;
+            com.agropecuariopos.backend.models.CompanySettings settings = settingsRepository.findFirst()
+                    .orElseThrow(() -> new RuntimeException("Configuración no encontrada para descarga."));
+            
+            String baseUrl = settings.getHaciendaRecepcionUrl() != null ? settings.getHaciendaRecepcionUrl() : "https://api-sandbox.comprobanteselectronicos.go.cr/recepcion/v1";
+            String url = baseUrl + "/comprobantes/" + clave;
             HttpHeaders headers = new HttpHeaders();
             headers.setBearerAuth(token);
             HttpEntity<Void> request = new HttpEntity<>(headers);
 
             RestTemplate restTemplate = new RestTemplate();
+            @SuppressWarnings({"unchecked", "null"})
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     url, HttpMethod.GET, request,
                     (Class<Map<String, Object>>) (Class<?>) Map.class

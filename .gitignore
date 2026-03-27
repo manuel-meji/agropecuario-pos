@@ -5,6 +5,11 @@
 # Logs del sistema
 *.log
 
+# Archivos grandes de build e instaladores
+installer_build/
+Output/
+*.exe
+
 # Carpetas de construcción / dependencias
 /backend/target/
 /frontend/node_modules/

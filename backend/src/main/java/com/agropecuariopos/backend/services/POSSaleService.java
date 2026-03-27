@@ -13,6 +13,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -41,6 +43,9 @@ public class POSSaleService {
     @Autowired
     private com.agropecuariopos.backend.repositories.ClientRepository clientRepository;
 
+    @Autowired
+    private com.agropecuariopos.backend.repositories.UserRepository userRepository;
+
     @Transactional
     public Sale processNewSale(SaleRequest request) {
 
@@ -56,6 +61,15 @@ public class POSSaleService {
         newSale.setStatus(Sale.SaleStatus.COMPLETED);
         newSale.setClientName(request.getClientName());
         newSale.setClientIdentification(request.getClientIdentification());
+
+        // Set Seller Name from Security Context
+        try {
+            Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+            String username = (principal instanceof UserDetails) ? ((UserDetails) principal).getUsername() : principal.toString();
+            userRepository.findByUsername(username).ifPresent(u -> newSale.setSellerName(u.getName()));
+        } catch (Exception e) {
+            logger.warn("Could not determine seller name: {}", e.getMessage());
+        }
 
         if (request.getClientId() != null) {
             com.agropecuariopos.backend.models.Client client = clientRepository.findById(request.getClientId())
@@ -100,7 +114,9 @@ public class POSSaleService {
                         .subtract(itemDiscount);
 
                 BigDecimal taxRate = IVA_STANDARD;
-                if (Boolean.TRUE.equals(product.getIsAgrochemicalInsufficiency()) &&
+                if (Boolean.TRUE.equals(request.getTaxExempt())) {
+                    taxRate = BigDecimal.ZERO;
+                } else if (Boolean.TRUE.equals(product.getIsAgrochemicalInsufficiency()) &&
                         request.getExonetAuthorizationCode() != null &&
                         !request.getExonetAuthorizationCode().trim().isEmpty()) {
                     taxRate = IVA_REDUCED_AGRO;

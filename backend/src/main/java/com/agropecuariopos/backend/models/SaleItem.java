@@ -10,6 +10,7 @@ import lombok.Setter;
 import org.hibernate.envers.Audited;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "sale_items")
@@ -55,4 +56,22 @@ public class SaleItem {
     @DecimalMin("0.0")
     @Column(precision = 12, scale = 2)
     private BigDecimal lineTotal;
+
+    // Campos Opcionales para <Exoneracion> Hacienda v4.4
+    @Column(length = 2)
+    private String exoneracionTipoDocumento; // ej: 04 (Ley), 05 (Compras Autorizadas)
+
+    @Column(length = 40)
+    private String exoneracionNumeroDocumento;
+
+    @Column(length = 160)
+    private String exoneracionNombreInstitucion;
+
+    private LocalDateTime exoneracionFechaEmision;
+
+    private Integer exoneracionPorcentaje;
+
+    @DecimalMin("0.0")
+    @Column(precision = 12, scale = 2)
+    private BigDecimal exoneracionMonto;
 }

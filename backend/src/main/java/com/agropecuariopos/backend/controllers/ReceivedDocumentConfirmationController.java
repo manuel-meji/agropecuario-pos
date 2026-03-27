@@ -8,7 +8,6 @@ import com.agropecuariopos.backend.services.hacienda.XadesSignatureService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -50,20 +49,8 @@ public class ReceivedDocumentConfirmationController {
     @Autowired
     private HaciendaAuthClientService authService;
 
-    @Value("${hacienda.api.recepcion.url}")
-    private String recepcionUrl;
-
-    @Value("${hacienda.emisor.cedula}")
-    private String emisorCedula;
-
-    @Value("${hacienda.emisor.tipo.cedula}")
-    private String emisorTipoCedula;
-
-    @Value("${hacienda.crypto.keystore.path}")
-    private String p12Path;
-
-    @Value("${hacienda.crypto.keystore.password}")
-    private String p12Password;
+    @Autowired
+    private com.agropecuariopos.backend.repositories.CompanySettingsRepository settingsRepository;
 
     /**
      * Aceptar Total (Mensaje = 1).
@@ -155,8 +142,15 @@ public class ReceivedDocumentConfirmationController {
                     return ResponseEntity.badRequest().body(Map.of("error", "Tipo inválido: " + tipo));
             }
 
-            // 2. Firmar con XAdES-EPES
-            String xmlFirmado = xadesSignatureService.signXmlDocument(xmlMensaje, p12Path, p12Password);
+            // 2. Firmar con XAdES-EPES desde BD
+            com.agropecuariopos.backend.models.CompanySettings settings = settingsRepository.findFirst()
+                    .orElseThrow(() -> new RuntimeException("No se encontró la configuración de la empresa para firmar."));
+            
+            if (settings.getHaciendaKeystoreFile() == null) {
+                throw new RuntimeException("No se ha cargado el certificado .p12 en la configuración.");
+            }
+
+            String xmlFirmado = xadesSignatureService.signXmlDocument(xmlMensaje, settings.getHaciendaKeystoreFile(), settings.getHaciendaKeystorePassword());
             doc.setXmlMensajeReceptorFirmado(xmlFirmado);
 
             // 3. Enviar a Hacienda
@@ -202,6 +196,9 @@ public class ReceivedDocumentConfirmationController {
     private String enviarMensajeAHacienda(String clave, String xmlFirmado, java.time.LocalDateTime fechaEmisión) {
         try {
             String token = authService.getValidAccessToken();
+            com.agropecuariopos.backend.models.CompanySettings settings = settingsRepository.findFirst()
+                    .orElseThrow(() -> new RuntimeException("No se encontró la configuración de la empresa."));
+            
             String xmlBase64 = Base64.getEncoder().encodeToString(xmlFirmado.getBytes("UTF-8"));
 
             String fechaFormateada = (fechaEmisión != null ? fechaEmisión : LocalDateTime.now())
@@ -212,8 +209,8 @@ public class ReceivedDocumentConfirmationController {
             body.put("clave", clave);
             body.put("fecha", fechaFormateada);
             body.put("emisor", Map.of(
-                    "tipoIdentificacion", emisorTipoCedula,
-                    "numeroIdentificacion", emisorCedula
+                    "tipoIdentificacion", settings.getLegalId().length() > 10 ? "02" : "01",
+                    "numeroIdentificacion", settings.getLegalId()
             ));
             body.put("comprobanteXml", xmlBase64);
 
@@ -222,8 +219,14 @@ public class ReceivedDocumentConfirmationController {
             headers.setBearerAuth(token);
 
             HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
-            RestTemplate rt = new RestTemplate();
-            ResponseEntity<String> response = rt.postForEntity(recepcionUrl, request, String.class);
+            
+            // Configurar RestTemplate con timeouts para evitar bloqueos
+            org.springframework.http.client.SimpleClientHttpRequestFactory factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
+            factory.setConnectTimeout(10000); // 10s
+            factory.setReadTimeout(15000);    // 15s
+            RestTemplate rt = new RestTemplate(factory);
+            
+            ResponseEntity<String> response = rt.postForEntity(settings.getHaciendaRecepcionUrl(), request, String.class);
 
             if (response.getStatusCode() == HttpStatus.ACCEPTED || response.getStatusCode().is2xxSuccessful()) {
                 return "OK";
@@ -231,7 +234,8 @@ public class ReceivedDocumentConfirmationController {
             return "HTTP_" + response.getStatusCode();
 
         } catch (Exception e) {
-            logger.warn("Error enviando MensajeReceptor a Hacienda: {}", e.getMessage());
+            logger.warn("❌ Error enviando MensajeReceptor a Hacienda: {} - Causa: {}", 
+                    e.getMessage(), e.getCause() != null ? e.getCause().getMessage() : "N/A");
             return "ERROR: " + e.getMessage();
         }
     }

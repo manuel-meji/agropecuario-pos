@@ -26,6 +26,10 @@ class AuthService {
     });
   }
 
+  recoverPassword(email: string) {
+    return axios.post(API_URL + 'forgot-password', { email });
+  }
+
   getCurrentUser() {
     const userStr = localStorage.getItem('user');
     if (userStr) return JSON.parse(userStr);

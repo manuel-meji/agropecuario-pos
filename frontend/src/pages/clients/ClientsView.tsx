@@ -97,7 +97,7 @@ export default function ClientsView() {
       setIsBulkPaymentModalOpen(false);
       setPaymentAmount('');
       
-      const updatedHistory = await getClientHistoryByClientId(clientHistory.id);
+      const updatedHistory = await getClientHistoryByClientId(clientHistory.clientId);
       setClientHistory(updatedHistory);
       loadClients();
     } catch (error: any) {

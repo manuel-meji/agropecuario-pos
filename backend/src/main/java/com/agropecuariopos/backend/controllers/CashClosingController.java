@@ -107,20 +107,52 @@ public class CashClosingController {
 
         // 2. Abonos received today
         List<PaymentRecord> payments = paymentRecordRepository.findByPaymentDateBetween(start, end);
-        BigDecimal totalPaymentsReceived = payments.stream()
-                .map(PaymentRecord::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalPaymentsReceived = BigDecimal.ZERO;
+        
+        for (PaymentRecord payment : payments) {
+            BigDecimal amount = payment.getAmount() != null ? payment.getAmount() : BigDecimal.ZERO;
+            totalPaymentsReceived = totalPaymentsReceived.add(amount);
+            
+            if (payment.getPaymentMethod() != null) {
+                switch (payment.getPaymentMethod()) {
+                    case CASH -> totalCash = totalCash.add(amount);
+                    case CARD -> totalCard = totalCard.add(amount);
+                    case SINPE_MOVIL -> totalSinpe = totalSinpe.add(amount);
+                    default -> totalCash = totalCash.add(amount);
+                }
+            } else {
+                totalCash = totalCash.add(amount);
+            }
+        }
 
         // 3. Expenses for the day
-        BigDecimal totalExpenses = dailyExpenseRepository
-                .sumDeductibleExpensesBetweenDates(start, end);
-        if (totalExpenses == null) totalExpenses = BigDecimal.ZERO;
+        List<com.agropecuariopos.backend.models.DailyExpense> dailyExpenses = dailyExpenseRepository.findByRegisteredDateBetween(start, end);
+        BigDecimal totalExpenses = BigDecimal.ZERO;
+        BigDecimal totalCashExpense = BigDecimal.ZERO;
+        BigDecimal totalCardExpense = BigDecimal.ZERO;
+        BigDecimal totalSinpeExpense = BigDecimal.ZERO;
 
-        // 4. Net cash (liquid collected: cash + sinpe + card + abonos - expenses)
+        for (com.agropecuariopos.backend.models.DailyExpense exp : dailyExpenses) {
+            if (Boolean.TRUE.equals(exp.getIsDeductibleFromProfit())) {
+                BigDecimal amount = exp.getAmount() != null ? exp.getAmount() : BigDecimal.ZERO;
+                totalExpenses = totalExpenses.add(amount);
+                if (exp.getPaymentMethod() != null) {
+                    switch (exp.getPaymentMethod()) {
+                        case CASH -> totalCashExpense = totalCashExpense.add(amount);
+                        case CARD -> totalCardExpense = totalCardExpense.add(amount);
+                        case SINPE_MOVIL -> totalSinpeExpense = totalSinpeExpense.add(amount);
+                        default -> totalCashExpense = totalCashExpense.add(amount);
+                    }
+                } else {
+                    totalCashExpense = totalCashExpense.add(amount);
+                }
+            }
+        }
+
+        // 4. Net cash (liquid collected: cash + sinpe + card - expenses)
         BigDecimal netCash = totalCash
                 .add(totalCard)
                 .add(totalSinpe)
-                .add(totalPaymentsReceived)
                 .subtract(totalExpenses);
 
         // 5. Get who is doing the closing
@@ -147,6 +179,9 @@ public class CashClosingController {
             closing.setTotalTax(totalTax);
             closing.setTotalGrossProfit(totalGrossProfit);
             closing.setTotalExpenses(totalExpenses);
+            closing.setTotalCashExpense(totalCashExpense);
+            closing.setTotalCardExpense(totalCardExpense);
+            closing.setTotalSinpeExpense(totalSinpeExpense);
             closing.setNetCash(netCash);
             closing.setNumberOfSales(sales.size());
             closing.setNumberOfPayments(payments.size());
@@ -161,7 +196,7 @@ public class CashClosingController {
                 totalCash, totalCard, totalSinpe, totalCredit,
                 totalPaymentsReceived,
                 totalRevenue, totalDiscount, totalTax, totalGrossProfit,
-                totalExpenses, netCash,
+                totalExpenses, totalCashExpense, totalCardExpense, totalSinpeExpense, netCash,
                 sales.size(), payments.size(),
                 notes
         );
@@ -173,7 +208,11 @@ public class CashClosingController {
                 c.getTotalCash(), c.getTotalCard(), c.getTotalSinpe(), c.getTotalCredit(),
                 c.getTotalPaymentsReceived(),
                 c.getTotalRevenue(), c.getTotalDiscount(), c.getTotalTax(), c.getTotalGrossProfit(),
-                c.getTotalExpenses(), c.getNetCash(),
+                c.getTotalExpenses(), 
+                c.getTotalCashExpense() != null ? c.getTotalCashExpense() : BigDecimal.ZERO,
+                c.getTotalCardExpense() != null ? c.getTotalCardExpense() : BigDecimal.ZERO,
+                c.getTotalSinpeExpense() != null ? c.getTotalSinpeExpense() : BigDecimal.ZERO,
+                c.getNetCash(),
                 c.getNumberOfSales(), c.getNumberOfPayments(),
                 c.getNotes()
         );

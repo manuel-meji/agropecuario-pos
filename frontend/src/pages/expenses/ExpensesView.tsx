@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
+import PaymentMethodSelector, { getPaymentMethodMeta } from '../../components/PaymentMethodSelector';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 type ExpenseCategory = 'OPERATIONAL_UTILITIES' | 'PAYROLL' | 'LOGISTICS' | 'MAINTENANCE' | 'TAXES' | 'MISCELLANEOUS' | 'OTROS';
@@ -18,6 +19,7 @@ interface Expense {
   isDeductibleFromProfit: boolean;
   registeredDate: string;
   registeredBy?: string;
+  paymentMethod?: string;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -41,6 +43,7 @@ const EMPTY = (): Partial<Expense> => ({
   category: 'MISCELLANEOUS',
   amount: 0,
   isDeductibleFromProfit: true,
+  paymentMethod: 'CASH',
 });
 
 // ─── Main Component ────────────────────────────────────────────────────────────
@@ -227,6 +230,7 @@ export default function ExpensesView() {
               <tr className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-black uppercase tracking-widest">
                 <th className="p-5">Descripción</th>
                 <th className="p-5">Categoría</th>
+                <th className="p-5">Medio de Pago</th>
                 <th className="p-5 text-center">Deducible</th>
                 <th className="p-5">Fecha</th>
                 <th className="p-5 text-right">Monto</th>
@@ -251,6 +255,16 @@ export default function ExpensesView() {
                       <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-black ${cat.bg} ${cat.color}`}>
                         <Icon size={12} /> {cat.label}
                       </div>
+                    </td>
+                    <td className="p-5">
+                                            {(() => {
+                        const meta = getPaymentMethodMeta(exp.paymentMethod);
+                        return meta ? (
+                          <span className={`inline-flex items-center gap-1.5 text-xs font-black px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 ${meta.color}`}>
+                            <meta.Icon size={12} /> {meta.label}
+                          </span>
+                        ) : <span className="text-slate-300 text-xs">—</span>;
+                      })()}
                     </td>
                     <td className="p-5 text-center">
                       {exp.isDeductibleFromProfit
@@ -286,7 +300,7 @@ export default function ExpensesView() {
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="p-16 text-center">
+                  <td colSpan={7} className="p-16 text-center">
                     <div className="flex flex-col items-center opacity-30">
                       <TrendingDown size={48} className="mb-4" />
                       <p className="font-black uppercase tracking-widest text-sm">Sin gastos registrados</p>
@@ -369,6 +383,9 @@ export default function ExpensesView() {
                     onChange={e => setForm({ ...form, amount: parseFloat(e.target.value) })}
                   />
                 </div>
+
+                {/* Medio de Pago */}
+                <PaymentMethodSelector value={form.paymentMethod ?? 'CASH'} onChange={v => setForm({ ...form, paymentMethod: v })} accentColor="rose" />
 
                 {/* Deducible toggle */}
                 <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/50 rounded-2xl px-5 py-4 border border-slate-100 dark:border-slate-700">

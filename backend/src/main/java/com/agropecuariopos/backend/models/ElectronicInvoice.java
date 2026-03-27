@@ -20,10 +20,25 @@ public class ElectronicInvoice {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // Referencia a la venta que originó este comprobante
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "sale_id", unique = true)
+    // Referencia a la venta que originó este comprobante (ManyToOne para permitir facturas y notas de crédito)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sale_id")
     private Sale sale;
+
+    // Campos para <InformacionReferencia> (Notas de Crédito / Débito)
+    @Column(length = 2)
+    private String referenciaTipoDocumento; // ej: 01 para Factura
+    
+    @Column(length = 50)
+    private String referenciaClave;         // Clave 50 dígitos del documento a anular/modificar
+    
+    private LocalDateTime referenciaFechaEmision;
+    
+    @Column(length = 2)
+    private String referenciaCodigo;        // ej: 01 (Anula documento de referencia), 02 (Corrige monto), 03 (Corrige texto), 04 (Referencia otro exp), 05 (Sustituye prov)
+    
+    @Column(length = 180)
+    private String referenciaRazon;
 
     // Clave de 50 dígitos única ante Hacienda
     @Column(unique = true, nullable = false, length = 50)

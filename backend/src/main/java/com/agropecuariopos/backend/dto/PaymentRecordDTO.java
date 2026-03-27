@@ -7,6 +7,8 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+import com.agropecuariopos.backend.models.PaymentRecord;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -19,4 +21,6 @@ public class PaymentRecordDTO {
     private LocalDateTime paymentDate;
     private BigDecimal previousBalance;
     private BigDecimal newBalance;
+    private PaymentRecord.PaymentMethod paymentMethod;
 }
+

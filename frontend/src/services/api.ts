@@ -21,6 +21,23 @@ api.interceptors.request.use(
   }
 );
 
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      if (localStorage.getItem('user')) {
+         localStorage.removeItem('user');
+         if (window.location.pathname !== '/login') {
+            window.location.href = '/login';
+         }
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
+export const validateToken = () => api.get('/auth/validate').then(res => res.data);
+
 export const getProducts = () => api.get('/products').then(res => res.data);
 export const createProduct = (product: any) => api.post('/products', product).then(res => res.data);
 export const getCategories = () => api.get('/categories').then(res => res.data);
@@ -47,9 +64,9 @@ export const getReceivables = () => api.get('/accounts-receivable').then(res => 
 export const getReceivablesByClient = () => api.get('/accounts-receivable/by-client').then(res => res.data);
 export const getClientHistory = (clientName: string) => api.get(`/accounts-receivable/${encodeURIComponent(clientName)}/history`).then(res => res.data);
 export const getClientHistoryByClientId = (clientId: number) => api.get(`/clients/${clientId}/history`).then(res => res.data);
-export const makePayment = (id: number, amount: number) => api.post(`/accounts-receivable/${id}/pay`, { amount }).then(res => res.data);
+export const makePayment = (id: number, amount: number, paymentMethod?: string) => api.post(`/accounts-receivable/${id}/pay`, { amount, paymentMethod }).then(res => res.data);
 export const getPaymentRecords = () => api.get('/accounts-receivable/payments').then(res => res.data);
-export const makeClientBulkPayment = (clientName: string, amount: number) => api.post(`/accounts-receivable/client/${encodeURIComponent(clientName)}/pay`, { amount }).then(res => res.data);
+export const makeClientBulkPayment = (clientName: string, amount: number, paymentMethod?: string) => api.post(`/accounts-receivable/client/${encodeURIComponent(clientName)}/pay`, { amount, paymentMethod }).then(res => res.data);
 
 // Purchases
 export const getPurchases = () => api.get('/purchases').then(res => res.data);
@@ -61,7 +78,7 @@ export const getPayables = () => api.get('/accounts-payable').then(res => res.da
 /** Get all payables for a supplier by their immutable ID (survives name changes). */
 export const getPayableHistory = (supplierId: number) => api.get(`/accounts-payable/by-supplier/${supplierId}`).then(res => res.data);
 export const getSupplierHistory = (supplierId: number) => api.get(`/suppliers/${supplierId}/history`).then(res => res.data);
-export const makePayablePayment = (id: number, amount: number) => api.post(`/accounts-payable/${id}/pay`, { amount }).then(res => res.data);
+export const makePayablePayment = (id: number, amount: number, paymentMethod?: string) => api.post(`/accounts-payable/${id}/pay`, { amount, paymentMethod }).then(res => res.data);
 // CABYS
 export const getCabysSearch = (query: string) => api.get('/cabys/search', { params: { query } }).then(res => res.data);
 export const getCabysByCode = (code: string) => api.get(`/cabys/${code}`).then(res => res.data);
@@ -72,8 +89,8 @@ export const getPayablePaymentRecords = async () => {
 };
 
 /** Bulk payment for a supplier using their immutable ID (survives name changes). */
-export const makeSupplierBulkPayment = async (supplierId: number, amount: number) => {
-  const response = await api.post(`/accounts-payable/by-supplier/${supplierId}/pay`, { amount });
+export const makeSupplierBulkPayment = async (supplierId: number, amount: number, paymentMethod?: string) => {
+  const response = await api.post(`/accounts-payable/by-supplier/${supplierId}/pay`, { amount, paymentMethod });
   return response.data;
 };
 // Cash Closing
@@ -144,7 +161,32 @@ export const updateConsecutive = (tipoDocumento: string, ultimoConsecutivo: numb
 export const exportSentInvoicesZip = (desde?: string, hasta?: string) =>
   api.get('/invoices/export-zip', { params: { desde, hasta }, responseType: 'blob' }).then(res => res.data);
 
+export const getRecentInvoices = () => api.get('/invoices/recent').then(res => res.data);
+
+// ─── Notas de Crédito (Anulaciones) ───────────────────────────────────────
+export const issueCreditNote = (saleId: number, razon: string) =>
+  api.post(`/invoices/sale/${saleId}/credit-note`, { razon }).then(res => res.data);
+
+export const getInvoiceBySale = (saleId: number) =>
+  api.get(`/invoices/sale/${saleId}`).then(res => res.data);
+
+// ─── Configuraciones ──────────────────────────────────────────────────────
+export const getSettings = () => api.get('/settings').then(res => res.data);
+export const updateSettings = (settings: any) => api.put('/settings', settings).then(res => res.data);
+export const uploadCertificate = (file: File) => {
+  const form = new FormData();
+  form.append('file', file);
+  return api.post('/settings/certificate', form, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }).then(res => res.data);
+};
+
+// --- Auth ---
+export const updateProfile = (profileData: any) => api.put('/auth/update-profile', profileData).then(res => res.data);
+
+// --- Admin - Users ---
+export const getUsers = () => api.get('/users').then(res => res.data);
+export const createUser = (user: any) => api.post('/users', user).then(res => res.data);
+export const deleteUser = (id: number) => api.delete(`/users/${id}`).then(res => res.data);
+
 export default api;
-
-
-

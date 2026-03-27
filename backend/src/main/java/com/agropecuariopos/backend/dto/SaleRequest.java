@@ -37,6 +37,9 @@ public class SaleRequest {
     // Whether to generate Hacienda Electronic Invoice
     private Boolean generateElectronicInvoice;
 
+    // Whether the sale is tax exempt (Regimen Simplificado)
+    private Boolean taxExempt;
+
     @NotEmpty
     private List<SaleItemRequest> items;
 
